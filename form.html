@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- Navigation Header -->
     <nav class="nav-header">
         <div class="nav-container">
             <div class="nav-brand">
@@ -56,30 +55,28 @@
                 </div>
             </div>
 
-            <!-- STEP 1: Basic Info -->
             <div id="step1" class="form-step active">
                 <form id="basicInfoForm">
                     <div class="form-group">
                         <label class="form-label">Tanggal <span class="required">*</span></label>
                         <input type="date" id="tanggal" class="form-input" required>
-                        <small class="text-danger" id="tanggalError"></small>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Shift <span class="required">*</span></label>
                         <select id="shift" class="form-select" required>
                             <option value="">Pilih Shift</option>
-                            <option value="Shift 1">Shift 1</option>
-                            <option value="Shift 2">Shift 2</option>
-                            <option value="Shift 3">Shift 3</option>
+                            <option value="1">Shift 1</option>
+                            <option value="2">Shift 2</option>
+                            <option value="3">Shift 3</option>
                         </select>
-                        <small class="text-danger" id="shiftError">Shift harus dipilih</small>
+                        <p class="helper-text">Shift harus dipilih</p>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">NPK (Nomor Pegawai) <span class="required">*</span></label>
                         <input type="text" id="npk" class="form-input" placeholder="Masukkan NPK" required>
-                        <small class="text-danger" id="npkError">NPK harus diisi</small>
+                        <p class="helper-text">NPK harus diisi</p>
                     </div>
 
                     <div class="form-group">
@@ -103,29 +100,28 @@
                             <option value="15">Channel 15</option>
                             <option value="16">Channel 16</option>
                         </select>
-                        <small class="text-danger" id="channelError">Channel harus dipilih</small>
+                        <p class="helper-text">Channel harus dipilih</p>
                     </div>
 
                     <div class="form-group">
                         <label for="bearingType" class="form-label">Tipe Bearing <span class="required">*</span></label>
-                        <select id="bearingType" class="form-select" required>
+                        <select id="bearingType" class="form-select" required>                            
                             <option value="">Pilih Tipe</option>
                         </select>
-                        <small class="text-danger" id="bearingTypeError">Tipe Bearing harus dipilih</small>
+                        <p class="helper-text">Tipe Bearing harus dipilih</p>
                     </div>
-
+                    
                     <div class="form-group">
                         <label for="category" class="form-label">Kategori <span class="required">*</span></label>
                         <select id="category" class="form-select" required>
                             <option value="">Pilih Kategori</option>
-                            <option value="Gauging">Gauging</option>
+                            <option value="gauging">Gauging</option>
                             <option value="Pokayoke">Pokayoke</option>
                             <option value="Clearance">Clearance</option>
                         </select>
-                        <small class="text-danger" id="categoryError">Kategori harus dipilih</small>
-                    </div>
-
-                    <!-- Clearance Field (hidden by default) -->
+                        <p class="helper-text">Kategori harus dipilih</p>
+                    </div> 
+                    
                     <div id="clearanceField" class="form-group" style="display: none;">
                         <label for="clearanceType" class="form-label">Tipe Clearance yang Sedang Running? <span class="required">*</span></label>
                         <select id="clearanceType" class="form-select">
@@ -136,61 +132,57 @@
                             <option value="C4">C4</option>
                             <option value="C5">C5</option>
                         </select>
-                        <small class="text-danger" id="clearanceTypeError">Pilih tipe clearance yang sedang dijalankan</small>
-                    </div>
+                        <p class="helper-text">Pilih tipe clearance yang sedang dijalankan</p>
+                    </div>  
 
                     <div class="center-button">
                         <button type="submit" class="btn-back">
                             Lanjutkan ke Data Pemeriksaan <span style="font-size: 1.25rem;">→</span>
                         </button>
                     </div>
+                    
                 </form>
             </div>
 
-            <!-- STEP 2: Master Check -->
-            <div id="step2" class="form-step">
-                <div class="info-alert">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="16" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12" y2="8"></line>
-                    </svg>
-                    <div>
-                        <p class="alert-title">Perhatian: Anda sedang mengisi untuk</p>
-                        <p class="alert-detail">
-                            <strong>Channel <span id="selectedChannel"></span></strong> | 
-                            Total Master: <strong><span id="totalMasters"></span></strong>
-                        </p>
-                    </div>
-                </div>
-
-                <form id="masterCheckForm">
-                    <div id="masterList" class="master-list"></div>
-
-                    <div class="form-actions">
-                        <button type="button" class="btn-back" onclick="goToStep1()">
-                            <span style="font-size: 1.25rem;">←</span> Kembali
-                        </button>
-                        <button type="submit" class="btn-submit">Simpan Data</button>
-                        <a href="dashboard.html" class="btn-back">
-                            Dashboard <span style="font-size: 1.25rem;">→</span>
-                        </a>
-                    </div>
-                </form>
-            </div>
+         <div id="step2" class="form-step" style="display: none;">
+    <div class="info-alert">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12" y2="8"></line>
+        </svg>
+        <div>
+            <p class="alert-title">Perhatian: Anda sedang mengisi untuk</p>
+            <p class="alert-detail">
+                <strong>Channel <span id="selectedChannel"></span></strong> |
+                Total Master <strong><span id="totalMasters"></span></strong>
+            </p>
         </div>
     </div>
 
-    <!-- Loading Modal -->
+    <form id="masterCheckForm">
+        <div id="masterList"></div>
+
+        <div class="form-actions">
+            <button type="button" class="btn-back" onclick="goToStep1()">
+                <span style="font-size: 1.25rem;">←</span> Kembali
+            </button>
+            <button type="submit" class="btn-submit">Simpan Data</button>
+            <a href="dashboard.html" class="btn-back">
+                Dashboard <span style="font-size: 1.25rem;">→</span>
+            </a>
+        </div>
+    </form>
+</div>
+
+
     <div id="loadingModal" class="modal">
         <div class="modal-content">
             <div class="spinner"></div>
-            <h3>Menyimpan data...</h3>
-            <p>Mohon tunggu, data sedang diproses</p>
+            <p>Menyimpan data...</p>
         </div>
     </div>
 
-    <!-- Scripts -->
     <script src="js/config.js"></script>
     <script src="js/form.js"></script>
 </body>
