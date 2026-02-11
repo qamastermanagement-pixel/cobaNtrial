@@ -334,31 +334,77 @@ function selectStatus(index, status) {
   const masterItem = document.querySelectorAll(".master-item")[index];
   const okBtn = masterItem.querySelector(".btn-ok");
   const ngBtn = masterItem.querySelector(".btn-ng");
+
   const remarkField = document.getElementById(`remark-${index}`);
+  const errorDiv = document.getElementById(`errorNumeric_${index}`);
 
-  okBtn.classList.remove("active");
-  ngBtn.classList.remove("active");
+  // helper reset remark UI
+  const resetRemarkUI = () => {
+    if (remarkField) remarkField.style.display = "none";
 
+    const numericRadio = document.querySelector(`input[name="remarkType_${index}"][value="numeric"]`);
+    if (numericRadio) numericRadio.checked = true;
+
+    const numericDiv = document.getElementById(`numericInput_${index}`);
+    const textDiv = document.getElementById(`textInput_${index}`);
+    if (numericDiv) numericDiv.style.display = "block";
+    if (textDiv) textDiv.style.display = "none";
+
+    // reset textarea
+    const numericTA = numericDiv?.querySelector("textarea");
+    const textTA = textDiv?.querySelector("textarea");
+    if (numericTA) numericTA.value = "";
+    if (textTA) textTA.value = "";
+
+    if (errorDiv) errorDiv.style.display = "none";
+  };
+
+  // === TOGGLE LOGIC ===
   if (status === "OK") {
+    // kalau OK sudah aktif, klik lagi => unselect
+    if (okBtn.classList.contains("active")) {
+      okBtn.classList.remove("active");
+      resetRemarkUI(); // pastikan remark bersih
+      return;
+    }
+
+    // aktifkan OK, matikan NG
     okBtn.classList.add("active");
-    remarkField.style.display = "none";
-    const numericRadio = document.querySelector(`input[name="remarkType_${index}"][value="numeric"]`);
-    if (numericRadio) numericRadio.checked = true;
-    document.getElementById(`numericInput_${index}`).style.display = "block";
-    document.getElementById(`textInput_${index}`).style.display = "none";
-    const errorDiv = document.getElementById(`errorNumeric_${index}`);
-    if (errorDiv) errorDiv.style.display = "none";
-  } else {
+    ngBtn.classList.remove("active");
+
+    // OK -> remark disembunyikan & dibersihkan
+    resetRemarkUI();
+    return;
+  }
+
+  if (status === "NG") {
+    // kalau NG sudah aktif, klik lagi => unselect
+    if (ngBtn.classList.contains("active")) {
+      ngBtn.classList.remove("active");
+      resetRemarkUI(); // remark ikut hilang
+      return;
+    }
+
+    // aktifkan NG, matikan OK
     ngBtn.classList.add("active");
-    remarkField.style.display = "block";
+    okBtn.classList.remove("active");
+
+    // NG -> tampilkan remark (default numeric)
+    if (remarkField) remarkField.style.display = "block";
+
     const numericRadio = document.querySelector(`input[name="remarkType_${index}"][value="numeric"]`);
     if (numericRadio) numericRadio.checked = true;
-    document.getElementById(`numericInput_${index}`).style.display = "block";
-    document.getElementById(`textInput_${index}`).style.display = "none";
-    const errorDiv = document.getElementById(`errorNumeric_${index}`);
+
+    const numericDiv = document.getElementById(`numericInput_${index}`);
+    const textDiv = document.getElementById(`textInput_${index}`);
+    if (numericDiv) numericDiv.style.display = "block";
+    if (textDiv) textDiv.style.display = "none";
+
     if (errorDiv) errorDiv.style.display = "none";
+    return;
   }
 }
+
 
 async function submitData() {
   const masters = JSON.parse(sessionStorage.getItem("displayedMasters") || "[]");
