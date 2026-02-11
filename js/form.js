@@ -1,12 +1,6 @@
 // =====================================================
 // form.js (UI LAMA) + MASTER DATA DARI GOOGLE SHEETS CSV
 // =====================================================
-//
-// CSV wajib punya header: Channel,BearingType,Category,Name,Code
-// - Channel boleh "1" atau "Channel 1" (dinormalisasi jadi "1").
-// - Category untuk data: "gauging" / "Pokayoke"
-// - Clearance di UI: ambil dari category "Pokayoke" dan name "Clearance Check - C2/Cn/C3/C4/C5"
-//   lalu ambil prev-now-next sesuai tipe clearance running.
 
 let MASTER_DATA = [];
 let CHANNEL_MASTERS = {};
@@ -17,11 +11,10 @@ function cleanStr(v) {
 
 function normalizeChannel(raw) {
   const s = cleanStr(raw);
-  const m = s.match(/(\d+)/); // "Channel 1" -> "1"
+  const m = s.match(/(\d+)/);
   return m ? m[1] : s;
 }
 
-// CSV parser yang aman (handle koma di dalam quote)
 function parseCsvLine(line) {
   const out = [];
   let cur = "";
@@ -30,7 +23,6 @@ function parseCsvLine(line) {
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
 
-    // escaped quote: ""
     if (ch === '"' && line[i + 1] === '"') {
       cur += '"';
       i++;
@@ -53,11 +45,10 @@ function parseCsvLine(line) {
 
 function buildChannelMastersFromMasterData() {
   const obj = {};
-
   for (const row of MASTER_DATA) {
     const channel = normalizeChannel(row.channel);
     const bearingType = cleanStr(row.bearingType);
-    const category = cleanStr(row.category); // "gauging" / "Pokayoke"
+    const category = cleanStr(row.category);
     const name = cleanStr(row.name);
     const code = cleanStr(row.code);
 
@@ -68,7 +59,6 @@ function buildChannelMastersFromMasterData() {
     obj[channel][bearingType][category] ??= [];
     obj[channel][bearingType][category].push({ name, code });
   }
-
   CHANNEL_MASTERS = obj;
 }
 
@@ -97,9 +87,8 @@ async function fetchMasterData() {
       name: headerCols.indexOf("name"),
       code: headerCols.indexOf("code"),
     };
-
     if (Object.values(idx).some(v => v === -1)) {
-      throw new Error("Header CSV harus mengandung: Channel,BearingType,Category,Name,Code");
+      throw new Error("Header CSV harus: Channel,BearingType,Category,Name,Code");
     }
 
     MASTER_DATA = [];
@@ -120,18 +109,15 @@ async function fetchMasterData() {
     console.log("[OK] Master loaded:", MASTER_DATA.length, "rows");
   } catch (err) {
     console.error("[ERR] fetchMasterData:", err);
-    alert("Gagal memuat data master dari Google Sheets.\n" + err.message);
+    alert("Gagal memuat data master.\n" + err.message);
   } finally {
     if (modalText) modalText.textContent = "Menyimpan data...";
     if (loadingModal) loadingModal.classList.remove("show");
   }
 }
 
-// ================================
-// INIT
-// ================================
 document.addEventListener("DOMContentLoaded", async () => {
-  // default tanggal hari ini
+  // default tanggal
   const today = new Date().toISOString().split("T")[0];
   const tanggalEl = document.getElementById("tanggal");
   if (tanggalEl) tanggalEl.value = today;
@@ -156,7 +142,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     submitData();
   });
 
-  // channel -> bearingType
   document.getElementById("channel").addEventListener("change", function () {
     const channel = this.value;
     const bearingSelect = document.getElementById("bearingType");
@@ -175,7 +160,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // toggle field clearance
   document.getElementById("category").addEventListener("change", function () {
     const field = document.getElementById("clearanceField");
     if (!field) return;
@@ -190,9 +174,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 });
 
-// ================================
-// STEP 2 (UI lama) + logic clearance
-// ================================
 function goToStep2() {
   const tanggal = document.getElementById("tanggal").value;
   const shift = document.getElementById("shift").value;
@@ -201,7 +182,6 @@ function goToStep2() {
   const bearingType = document.getElementById("bearingType").value;
   const category = document.getElementById("category").value;
 
-  // clearance running wajib dipilih
   let clearanceType = "";
   if (category === "Clearance") {
     clearanceType = document.getElementById("clearanceType")?.value;
@@ -216,18 +196,15 @@ function goToStep2() {
     return;
   }
 
-  // simpan info (untuk submit)
   sessionStorage.setItem("tanggal", tanggal);
   sessionStorage.setItem("shift", shift);
   sessionStorage.setItem("npk", npk);
   sessionStorage.setItem("channel", channel);
   sessionStorage.setItem("bearingType", bearingType);
 
-  // Clearance disimpan sebagai Pokayoke
   const actualCategory = (category === "Clearance") ? "Pokayoke" : category;
   sessionStorage.setItem("category", actualCategory);
 
-  // info header step2
   const sc = document.getElementById("selectedChannel");
   if (sc) sc.textContent = channel;
 
@@ -240,7 +217,6 @@ function goToStep2() {
       return;
     }
 
-    // ambil hanya clearance check
     const map = {};
     pokayokeMasters.forEach(item => {
       const m = item.name.match(/Clearance Check - (C2|Cn|C3|C4|C5)/);
@@ -254,14 +230,12 @@ function goToStep2() {
       return;
     }
 
-    // prev-now-next
     if (idx > 0 && map[order[idx - 1]]) masters.push(map[order[idx - 1]]);
     if (map[clearanceType]) masters.push(map[clearanceType]);
     if (idx < order.length - 1 && map[order[idx + 1]]) masters.push(map[order[idx + 1]]);
   } else {
     const raw = CHANNEL_MASTERS[channel]?.[bearingType]?.[category] || [];
     if (category === "Pokayoke") {
-      // Pokayoke biasa: buang clearance check
       masters = raw.filter(item => !/Clearance Check - (C2|Cn|C3|C4|C5)/.test(item.name));
     } else {
       masters = raw;
@@ -276,8 +250,11 @@ function goToStep2() {
   const tm = document.getElementById("totalMasters");
   if (tm) tm.textContent = masters.length;
 
-  // render UI lama ke #masterList
   const masterList = document.getElementById("masterList");
+  if (!masterList) {
+    alert("ERROR: #masterList tidak ditemukan. Pastikan form.html yang kamu upload adalah versi UI lama.");
+    return;
+  }
   masterList.innerHTML = "";
 
   masters.forEach((item, index) => {
@@ -313,7 +290,6 @@ function goToStep2() {
     `;
     masterList.appendChild(masterItem);
 
-    // toggle numeric/text
     document.querySelectorAll(`input[name="remarkType_${index}"]`).forEach(radio => {
       radio.addEventListener("change", function () {
         const numericDiv = document.getElementById(`numericInput_${index}`);
@@ -334,18 +310,26 @@ function goToStep2() {
 
   sessionStorage.setItem("displayedMasters", JSON.stringify(masters));
 
-  document.getElementById("step1").classList.remove("active");
-  document.getElementById("step2").classList.add("active");
+  // ✅ FIX STEP (class + display)
+  const step1 = document.getElementById("step1");
+  const step2 = document.getElementById("step2");
+  step1.classList.remove("active");
+  step1.style.display = "none";
+  step2.classList.add("active");
+  step2.style.display = "block";
 }
 
 function goToStep1() {
-  document.getElementById("step2").classList.remove("active");
-  document.getElementById("step1").classList.add("active");
+  const step1 = document.getElementById("step1");
+  const step2 = document.getElementById("step2");
+
+  step2.classList.remove("active");
+  step2.style.display = "none";
+
+  step1.classList.add("active");
+  step1.style.display = "block";
 }
 
-// ================================
-// OK/NG UI lama
-// ================================
 function selectStatus(index, status) {
   const masterItem = document.querySelectorAll(".master-item")[index];
   const okBtn = masterItem.querySelector(".btn-ok");
@@ -358,33 +342,24 @@ function selectStatus(index, status) {
   if (status === "OK") {
     okBtn.classList.add("active");
     remarkField.style.display = "none";
-
-    // reset ke numeric
     const numericRadio = document.querySelector(`input[name="remarkType_${index}"][value="numeric"]`);
     if (numericRadio) numericRadio.checked = true;
     document.getElementById(`numericInput_${index}`).style.display = "block";
     document.getElementById(`textInput_${index}`).style.display = "none";
-
     const errorDiv = document.getElementById(`errorNumeric_${index}`);
     if (errorDiv) errorDiv.style.display = "none";
   } else {
     ngBtn.classList.add("active");
     remarkField.style.display = "block";
-
-    // default numeric
     const numericRadio = document.querySelector(`input[name="remarkType_${index}"][value="numeric"]`);
     if (numericRadio) numericRadio.checked = true;
     document.getElementById(`numericInput_${index}`).style.display = "block";
     document.getElementById(`textInput_${index}`).style.display = "none";
-
     const errorDiv = document.getElementById(`errorNumeric_${index}`);
     if (errorDiv) errorDiv.style.display = "none";
   }
 }
 
-// ================================
-// SUBMIT + validasi angka remark numeric
-// ================================
 async function submitData() {
   const masters = JSON.parse(sessionStorage.getItem("displayedMasters") || "[]");
   if (!masters.length) {
@@ -453,7 +428,7 @@ async function submitData() {
           }
           if (errorDiv) errorDiv.style.display = "none";
         } else {
-          remark = textTA?.value.trim() || ""; // boleh kosong
+          remark = textTA?.value.trim() || "";
         }
       }
 
@@ -471,7 +446,7 @@ async function submitData() {
       npk: sessionStorage.getItem("npk"),
       channel: `Channel ${sessionStorage.getItem("channel")}`,
       bearingType: sessionStorage.getItem("bearingType"),
-      category: sessionStorage.getItem("category"), // Clearance tersimpan sebagai Pokayoke
+      category: sessionStorage.getItem("category"),
       masters: results
     };
 
