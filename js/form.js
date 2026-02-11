@@ -9,27 +9,17 @@ let selectedMasters = [];
 ========================= */
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("[v0] Form.js loaded");
-
-    // FETCH DATA SAAT AWAL
     await fetchMasterData();
+
+    const channelSelect = document.getElementById("channel");
+    if (channelSelect) {
+        channelSelect.addEventListener("change", updateBearingTypeOptions);
+    }
 
     const basicForm = document.getElementById("basicInfoForm");
     const masterForm = document.getElementById("masterCheckForm");
-
-    if (basicForm) {
-        basicForm.addEventListener("submit", (e) => {
-            e.preventDefault();
-            goToStep2();
-        });
-    }
-
-    if (masterForm) {
-        masterForm.addEventListener("submit", (e) => {
-            e.preventDefault();
-            submitData();
-        });
-    }
 });
+
 
 /* =========================
    FETCH MASTER DATA (CSV)
