@@ -85,7 +85,7 @@ async function fetchMasterData() {
     try {
         const url =
             window.CONFIG?.MASTER_DATA_URL ||
-            "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrVEMf_DG702fbz5Gy12__YvNYc1lNXTW-gFcZbV5J0NSndYYvjQb_HmjsEWImsZBLAEZqlTs9eLDh/pub?gid=0&single=true&output=csv  ";
+            "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrVEMf_DG702fbz5Gy12__YvNYc1lNXTW-gFcZbV5J0NSndYYvjQb_HmjsEWImsZBLAEZqlTs9eLDh/pub?gid=0&single=true&output=csv";
 
         console.log("[v0] Memuat data master dari Sheets...");
         const response = await fetch(url);
@@ -292,3 +292,5 @@ function submitData() {
     console.log("HASIL SUBMIT:", results);
     alert("Data valid, siap dikirim ke backend");
 }
+
+
