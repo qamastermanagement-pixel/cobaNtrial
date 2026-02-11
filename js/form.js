@@ -1,35 +1,62 @@
-// Ambil data master dari Google Sheets
-let CHANNEL_MASTERS = {};
-
-async function loadChannelMasters() {
-  try {
-    const response = await fetch('https://script.google.com/macros/s/AKfycbz0-nOeLgDb42iqu0Wz9dD-uUQ8BlpyygHmQs7s2ID1yBHzOspC72ORwdJaLOEYbtVN/exec'); // GANTI DENGAN URL WEB APP ANDA
-    CHANNEL_MASTERS = await response.json();
-    console.log("[v0] Data master berhasil dimuat dari Google Sheets:", CHANNEL_MASTERS);
-  } catch (error) {
-    console.error("[v0] Gagal memuat data master:", error);
-    alert("Gagal memuat data master dari Google Sheets. Periksa koneksi internet atau hubungi admin.");
-    // Fallback minimal (opsional)
-    CHANNEL_MASTERS = {};
-  }
-}
-
-// Panggil saat halaman dimuat
-document.addEventListener("DOMContentLoaded", () => {
-  loadChannelMasters().then(() => {
-    // Setup event listeners dan lainnya...
-    setupForm();
-  });
-});
-
-// Pindahkan semua kode dalam DOMContentLoaded ke fungsi ini
 function setupForm() {
   console.log("[v0] Form.js loaded");
   
-  // Set today's date as default
-  const today = new Date().toISOString().split("T")[0];
-  document.getElementById("tanggal").value = today;
+  // 1. Set tanggal default
+  const tanggalInput = document.getElementById("tanggal");
+  if (tanggalInput) {
+    const today = new Date().toISOString().split("T")[0];
+    tanggalInput.value = today;
+  }
+
+  // 2. Ambil elemen dropdown Channel
+  const channelSelect = document.getElementById("channel"); // Pastikan ID di HTML adalah "channel"
   
-  // ... (copy SEMUA kode dari dalam DOMContentLoaded yang lama ke sini)
-  // Termasuk event listeners, goToStep2(), submitData(), dll.
+  if (!channelSelect) {
+    console.error("Elemen dropdown channel tidak ditemukan!");
+    return;
+  }
+
+  // 3. Isi dropdown Channel dari keys CHANNEL_MASTERS
+  const daftarChannel = Object.keys(CHANNEL_MASTERS);
+  
+  // Kosongkan dan isi pilihan default
+  channelSelect.innerHTML = '<option value="">-- Pilih Channel --</option>';
+  
+  if (daftarChannel.length > 0) {
+    daftarChannel.forEach(ch => {
+      let option = document.createElement("option");
+      option.value = ch;
+      option.text = ch;
+      channelSelect.appendChild(option);
+    });
+    console.log("[v0] Dropdown channel berhasil diisi.");
+  } else {
+    console.warn("[v0] Data channel kosong. Cek Apps Script atau Koneksi.");
+  }
+
+  // 4. Tambahkan Event Listener jika ingin mengisi data lain otomatis (Optional)
+  channelSelect.addEventListener("change", function() {
+    const selectedChannel = this.value;
+    console.log("Channel dipilih:", selectedChannel);
+    
+    // Jika kamu punya dropdown "Master Name" yang bergantung pada Channel:
+    updateMasterNameDropdown(selectedChannel);
+  });
+}
+
+// Fungsi tambahan untuk mengisi dropdown Master Name (Gauging)
+function updateMasterNameDropdown(channelName) {
+  const masterSelect = document.getElementById("master_name"); // Sesuaikan ID-nya
+  if (!masterSelect) return;
+
+  masterSelect.innerHTML = '<option value="">-- Pilih Master --</option>';
+
+  if (CHANNEL_MASTERS[channelName] && CHANNEL_MASTERS[channelName].gauging) {
+    CHANNEL_MASTERS[channelName].gauging.forEach(item => {
+      let option = document.createElement("option");
+      option.value = item.code; // Simpan kodenya sebagai value
+      option.text = item.name;  // Tampilkan namanya
+      masterSelect.appendChild(option);
+    });
+  }
 }
