@@ -50,6 +50,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const channelSelect = document.getElementById("channel");
     if (channelSelect) {
         channelSelect.addEventListener("change", updateBearingTypeOptions);
+
+        if (channelSelect.value) {
+            updateBearingTypeOptions();
+        }
     }
 
     const basicForm = document.getElementById("basicInfoForm");
