@@ -4,6 +4,42 @@
 let MASTER_DATA = [];
 let selectedMasters = [];
 
+function updateBearingTypeOptions() {
+    const channel = document.getElementById("channel").value;
+    const bearingSelect = document.getElementById("bearingType");
+
+    if (!bearingSelect) return;
+
+    // Reset dropdown
+    bearingSelect.innerHTML = `<option value="">Pilih Tipe</option>`;
+
+    if (!channel) return;
+
+    // Ambil bearing unik berdasarkan channel
+    const bearings = [
+        ...new Set(
+            MASTER_DATA
+                .filter(m => String(m.channel) === String(channel))
+                .map(m => m.bearingType)
+                .filter(Boolean)
+        )
+    ];
+
+    if (bearings.length === 0) {
+        console.warn("Tidak ada bearing untuk channel:", channel);
+        return;
+    }
+
+    bearings.forEach(bt => {
+        const opt = document.createElement("option");
+        opt.value = bt;
+        opt.textContent = bt;
+        bearingSelect.appendChild(opt);
+    });
+
+    console.log("[Debug] Bearing Type diisi:", bearings);
+}
+
 /* =========================
    DOM READY
 ========================= */
@@ -253,38 +289,4 @@ function submitData() {
     alert("Data valid, siap dikirim ke backend");
 }
 
-function updateBearingTypeOptions() {
-    const channel = document.getElementById("channel").value;
-    const bearingSelect = document.getElementById("bearingType");
 
-    if (!bearingSelect) return;
-
-    // Reset dropdown
-    bearingSelect.innerHTML = `<option value="">Pilih Tipe</option>`;
-
-    if (!channel) return;
-
-    // Ambil bearing unik berdasarkan channel
-    const bearings = [
-        ...new Set(
-            MASTER_DATA
-                .filter(m => String(m.channel) === String(channel))
-                .map(m => m.bearingType)
-                .filter(Boolean)
-        )
-    ];
-
-    if (bearings.length === 0) {
-        console.warn("Tidak ada bearing untuk channel:", channel);
-        return;
-    }
-
-    bearings.forEach(bt => {
-        const opt = document.createElement("option");
-        opt.value = bt;
-        opt.textContent = bt;
-        bearingSelect.appendChild(opt);
-    });
-
-    console.log("[Debug] Bearing Type diisi:", bearings);
-}
