@@ -163,8 +163,6 @@ function goToStep1() {
    STEP 2 - GO TO MASTER CHECK
 ========================= */
 function goToStep2() {
-    console.log("[v0] goToStep2 function called");
-    
     const tanggal = document.getElementById("tanggal")?.value;
     const shift = document.getElementById("shift")?.value;
     const npk = document.getElementById("npk")?.value;
@@ -193,10 +191,7 @@ function goToStep2() {
     sessionStorage.setItem("npk", npk);
     sessionStorage.setItem("channel", channel);
     sessionStorage.setItem("bearingType", bearingType);
-    
-    // ✅ PENTING: Simpan kategori asli sebagai "Pokayoke" jika pilih Clearance
-    const actualCategory = (category === "Clearance") ? "Pokayoke" : category;
-    sessionStorage.setItem("category", actualCategory);
+    sessionStorage.setItem("category", category);
 
     // Display selected channel info
     document.getElementById("selectedChannel").textContent = channel;
@@ -243,22 +238,11 @@ function goToStep2() {
 
     } else {
         // Kategori biasa
-        let rawMasters = MASTER_DATA.filter(m =>
+        masters = MASTER_DATA.filter(m =>
             String(m.channel) === String(channel) &&
             String(m.bearingType) === String(bearingType) &&
             m.category.toLowerCase() === category.toLowerCase()
         );
-        
-        if (!rawMasters || rawMasters.length === 0) {
-            masters = [];
-        } else if (category === "Pokayoke") {
-            // 🔥 FILTER: HILANGKAN SEMUA "Clearance Check"
-            masters = rawMasters.filter(item =>
-                !/Clearance Check - (C2|Cn|C3|C4|C5)/.test(item.name)
-            );
-        } else {
-            masters = rawMasters;
-        }
     }
     
     if (!masters || masters.length === 0) {
@@ -271,7 +255,7 @@ function goToStep2() {
     // Render master cards
     renderMasterCards(masters);
 
-    // Simpan daftar master yang ditampilkan (termasuk hasil filter Clearance)
+    // Simpan daftar master yang ditampilkan
     sessionStorage.setItem("displayedMasters", JSON.stringify(masters));
 
     // Switch to step 2
@@ -298,20 +282,8 @@ function renderMasterCards(masters) {
                     ${i + 1}. ${m.name} (${m.code})
                 </div>
                 <div class="status-buttons">
-                    <button type="button" class="btn-ok" onclick="selectStatus(${i}, 'OK')">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        OK
-                    </button>
-                    <button type="button" class="btn-ng" onclick="selectStatus(${i}, 'NG')">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="15" y1="9" x2="9" y2="15"></line>
-                            <line x1="9" y1="9" x2="15" y2="15"></line>
-                        </svg>
-                        NG
-                    </button>
+                    <button type="button" class="btn-ok" onclick="selectStatus(${i}, 'OK')">OK</button>
+                    <button type="button" class="btn-ng" onclick="selectStatus(${i}, 'NG')">NG</button>
                 </div>
             </div>
 
@@ -329,14 +301,14 @@ function renderMasterCards(masters) {
                 </div>
 
                 <!-- Numeric remark -->
-                <div class="remark-input numeric-input" id="numericInput_${i}">
+                <div class="remark-input" id="numericInput_${i}">
                     <textarea class="remark-textarea" 
                         placeholder="Remark hanya boleh diisi jika ada perubahan nilai numerik pada master"></textarea>
                     <small class="error-msg" id="errorNumeric_${i}" style="color:red; display:none;"></small>
                 </div>
 
                 <!-- Text remark -->
-                <div class="remark-input text-input" id="textInput_${i}" style="display:none;">
+                <div class="remark-input" id="textInput_${i}" style="display:none;">
                     <textarea class="remark-textarea" 
                         placeholder="Remark diisi jika NG, dapat berupa problem yang terjadi. Tapi bukan perubahan nilai!"></textarea>
                 </div>
@@ -412,7 +384,7 @@ function selectStatus(i, status) {
 /* =========================
    SUBMIT DATA
 ========================= */
-async function submitData() {
+function submitData() {
     const masters = JSON.parse(sessionStorage.getItem("displayedMasters"));
     
     if (!masters || !Array.isArray(masters)) {
@@ -420,8 +392,6 @@ async function submitData() {
         return;
     }
 
-    console.log("[v0] Submitting data...");
-    
     const masterResults = [];
 
     for (let i = 0; i < masters.length; i++) {
@@ -433,8 +403,7 @@ async function submitData() {
                       ng.classList.contains("active") ? "NG" : null;
 
         if (!status) {
-            const masterDisplay = `${masters[i].name} (${masters[i].code})`;
-            alert(`Mohon pilih status untuk ${masterDisplay}`);
+            alert(`Mohon pilih status untuk ${masters[i].name} (${masters[i].code})`);
             return;
         }
 
@@ -508,18 +477,19 @@ async function submitData() {
     const loadingModal = document.getElementById("loadingModal");
     if (loadingModal) loadingModal.classList.add("show");
 
-    try {
-        // Send data to Google Apps Script
-        const response = await fetch(appsScriptUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "text/plain;charset=utf-8",
-            },
-            body: JSON.stringify(data),
-        });
-
+    // Send data to Google Apps Script
+    fetch(appsScriptUrl, {
+        method: "POST",
+        headers: {
+            "Content-Type": "text/plain;charset=utf-8",
+        },
+        body: JSON.stringify(data),
+    })
+    .then(response => {
         console.log("[v0] Response status:", response.status);
-        const result = await response.text();
+        return response.text();
+    })
+    .then(result => {
         console.log("[v0] Response:", result);
 
         // Hide loading modal
@@ -533,9 +503,10 @@ async function submitData() {
 
         // Redirect to dashboard
         window.location.href = "dashboard.html";
-    } catch (error) {
+    })
+    .catch(error => {
         console.error("[v0] Error:", error);
         if (loadingModal) loadingModal.classList.remove("show");
         alert("Gagal menyimpan data. Silakan coba lagi. Error: " + error.message);
-    }
+    });
 }
