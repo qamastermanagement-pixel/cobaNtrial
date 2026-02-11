@@ -17,7 +17,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const basicForm = document.getElementById("basicInfoForm");
-    const masterForm = document.getElementById("masterCheckForm");
+      if (basicForm) {
+          basicForm.addEventListener("submit", (e) => {
+              e.preventDefault();
+              goToStep2();
+          });
+      }
+      
+      const masterForm = document.getElementById("masterCheckForm");
+      if (masterForm) {
+          masterForm.addEventListener("submit", (e) => {
+              e.preventDefault();
+              submitData();
+          });
+      }
+
 });
 
 
@@ -80,16 +94,18 @@ function goToStep1() {
 ========================= */
 function goToStep2() {
     const channel = document.getElementById("channel")?.value;
+    const bearingType = document.getElementById("bearingType")?.value;
     const category = document.getElementById("category")?.value;
 
-    if (!channel || !category) {
-        alert("Channel dan Kategori harus dipilih");
+    if (!channel || !bearingType || !category) {
+        alert("Channel, Tipe Bearing, dan Kategori harus dipilih");
         return;
     }
 
     selectedMasters = MASTER_DATA.filter(
         (m) =>
             String(m.channel) === String(channel) &&
+            String(m.bearingType) === String(bearingType) &&
             m.category.toLowerCase() === category.toLowerCase()
     );
 
@@ -98,21 +114,16 @@ function goToStep2() {
         return;
     }
 
-    // === TAMPILKAN STEP 2 DULU ===
     document.getElementById("step1")?.classList.remove("active");
     document.getElementById("step2").style.display = "block";
 
-    // === BARU SET INFO HEADER ===
     document.getElementById("selectedChannel").innerText = channel;
     document.getElementById("totalMasters").innerText = selectedMasters.length;
 
-    sessionStorage.setItem(
-        "displayedMasters",
-        JSON.stringify(selectedMasters)
-    );
-
+    sessionStorage.setItem("displayedMasters", JSON.stringify(selectedMasters));
     renderMasterCards(selectedMasters);
 }
+
 
 /* =========================
    RENDER MASTER CARDS
@@ -240,4 +251,40 @@ function submitData() {
 
     console.log("HASIL SUBMIT:", results);
     alert("Data valid, siap dikirim ke backend");
+}
+
+function updateBearingTypeOptions() {
+    const channel = document.getElementById("channel").value;
+    const bearingSelect = document.getElementById("bearingType");
+
+    if (!bearingSelect) return;
+
+    // Reset dropdown
+    bearingSelect.innerHTML = `<option value="">Pilih Tipe</option>`;
+
+    if (!channel) return;
+
+    // Ambil bearing unik berdasarkan channel
+    const bearings = [
+        ...new Set(
+            MASTER_DATA
+                .filter(m => String(m.channel) === String(channel))
+                .map(m => m.bearingType)
+                .filter(Boolean)
+        )
+    ];
+
+    if (bearings.length === 0) {
+        console.warn("Tidak ada bearing untuk channel:", channel);
+        return;
+    }
+
+    bearings.forEach(bt => {
+        const opt = document.createElement("option");
+        opt.value = bt;
+        opt.textContent = bt;
+        bearingSelect.appendChild(opt);
+    });
+
+    console.log("[Debug] Bearing Type diisi:", bearings);
 }
