@@ -433,7 +433,8 @@ async function submitData() {
                       ng.classList.contains("active") ? "NG" : null;
 
         if (!status) {
-            alert(`Mohon pilih status untuk ${masters[i].name} (${masters[i].code})`);
+            const masterDisplay = `${masters[i].name} (${masters[i].code})`;
+            alert(`Mohon pilih status untuk ${masterDisplay}`);
             return;
         }
 
