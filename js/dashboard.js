@@ -5,8 +5,8 @@ let chartInstance = null
 // INIT
 // ================================
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("[v1] Dashboard.js loaded")
-  console.log("[v1] CONFIG:", window.CONFIG)
+  console.log("[v2] Dashboard.js loaded")
+  console.log("[v2] CONFIG:", window.CONFIG)
 
   // default date = today
   const today = new Date().toISOString().split("T")[0]
@@ -17,6 +17,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("filterDate")
     .addEventListener("change", filterAndDisplayData)
+
+  // PDF button
+  const btnPdf = document.getElementById("btnDownloadNGPdf")
+  if (btnPdf) btnPdf.addEventListener("click", downloadNGFormalPdf)
 })
 
 // ================================
@@ -24,21 +28,21 @@ document.addEventListener("DOMContentLoaded", () => {
 // ================================
 async function loadData() {
   try {
-    console.log("[v1] Fetching data...")
+    console.log("[v2] Fetching data...")
     const res = await fetch(window.CONFIG.APPS_SCRIPT_URL)
     const result = await res.json()
 
     if (result.status === "success") {
       allData = result.data || []
-      console.log("[v1] Data loaded:", allData.length)
+      console.log("[v2] Data loaded:", allData.length)
     } else {
       allData = []
-      console.error("[v1] API error:", result.message)
+      console.error("[v2] API error:", result.message)
     }
 
     filterAndDisplayData()
   } catch (err) {
-    console.error("[v1] Fetch failed:", err)
+    console.error("[v2] Fetch failed:", err)
     allData = []
     filterAndDisplayData()
   }
@@ -49,20 +53,19 @@ async function loadData() {
 // ================================
 function filterAndDisplayData() {
   const filterDate = document.getElementById("filterDate").value
-  console.log("[v1] Filter date:", filterDate)
+  console.log("[v2] Filter date:", filterDate)
 
   const filteredData = allData.filter((entry) => {
     const entryDate = String(entry.Tanggal).split("T")[0]
     return entryDate === filterDate
   })
 
-  console.log("[v1] Filtered:", filteredData.length)
+  console.log("[v2] Filtered:", filteredData.length)
 
   updateStats(filteredData)
   updateChannelTable(filteredData)
   updateChart(filteredData)
-  updateNGTrackerTable(filteredData);
-
+  updateNGTrackerTable(filteredData)
 }
 
 // ================================
@@ -91,8 +94,7 @@ function updateStats(data) {
   const covered = checkpointSet.size
   const coverage = Math.round((covered / TOTAL_CHECKPOINTS) * 100)
   const totalEntries = data.length
-  const okRate =
-    totalEntries > 0 ? Math.round((okCount / totalEntries) * 100) : 0
+  const okRate = totalEntries > 0 ? Math.round((okCount / totalEntries) * 100) : 0
 
   document.getElementById("totalChecked").textContent = totalEntries
   document.getElementById("mastersOk").textContent = okCount
@@ -100,8 +102,7 @@ function updateStats(data) {
   document.getElementById("ngCount").textContent = ngCount
   document.getElementById("okRate").textContent = okRate
   document.getElementById("coverage").textContent = `${coverage}%`
-  document.getElementById("checkPoints").textContent =
-    `${covered}/${TOTAL_CHECKPOINTS}`
+  document.getElementById("checkPoints").textContent = `${covered}/${TOTAL_CHECKPOINTS}`
 }
 
 // ================================
@@ -119,12 +120,9 @@ function updateChannelTable(data) {
     const status = entry.Status
 
     if (!statusMap[channel]) statusMap[channel] = {}
-    if (!statusMap[channel][shift])
-      statusMap[channel][shift] = { ok: 0, ng: 0 }
+    if (!statusMap[channel][shift]) statusMap[channel][shift] = { ok: 0, ng: 0 }
 
-    status === "OK"
-      ? statusMap[channel][shift].ok++
-      : statusMap[channel][shift].ng++
+    status === "OK" ? statusMap[channel][shift].ok++ : statusMap[channel][shift].ng++
   })
 
   for (let i = 1; i <= 16; i++) {
@@ -189,8 +187,7 @@ function updateChart(data) {
           callbacks: {
             label: (c) => {
               const total = ok + ng
-              const pct =
-                total > 0 ? Math.round((c.parsed / total) * 100) : 0
+              const pct = total > 0 ? Math.round((c.parsed / total) * 100) : 0
               return `${c.label}: ${c.parsed} (${pct}%)`
             },
           },
@@ -200,20 +197,23 @@ function updateChart(data) {
   })
 }
 
+// ================================
+// NG TRACKER TABLE
+// ================================
 function updateNGTrackerTable(data) {
-  const tbody = document.getElementById("remarkTableBody");
-  tbody.innerHTML = "";
+  const tbody = document.getElementById("remarkTableBody")
+  tbody.innerHTML = ""
 
-  //Tampilkan SEMUA NG, BAIK ADA REMARK ATAU TIDAK
-  const ngEntries = data.filter(entry => entry.Status === "NG");
+  const ngEntries = data.filter((entry) => entry.Status === "NG")
 
   if (ngEntries.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center">Tidak ada NG hari ini</td></tr>`;
-    return;
+    // ✅ FIX: colspan harus 7 (sesuai 7 kolom tabel)
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center">Tidak ada NG hari ini</td></tr>`
+    return
   }
 
-  ngEntries.forEach(entry => {
-    const row = document.createElement("tr");
+  ngEntries.forEach((entry) => {
+    const row = document.createElement("tr")
     row.innerHTML = `
       <td>${entry.Tanggal}</td>
       <td>${entry.Channel}</td>
@@ -222,84 +222,186 @@ function updateNGTrackerTable(data) {
       <td>${entry.Remark || ""}</td>
       <td>${entry.Kategori || "-"}</td>
       <td>${entry.Code || "-"}</td>
-    `;
-    tbody.appendChild(row);
-  });
+    `
+    tbody.appendChild(row)
+  })
 }
 
 // ================================
-// DOWNLOAD NG TRACKER (CSV)
+// FORMAL PDF REPORT: NG TRACKER
 // ================================
-document.addEventListener("DOMContentLoaded", () => {
-  const btn = document.getElementById("btnDownloadNG");
-  if (btn) btn.addEventListener("click", downloadNGCsv);
-});
-
-function downloadNGCsv() {
-  const tbody = document.getElementById("remarkTableBody");
+function downloadNGFormalPdf() {
+  const tbody = document.getElementById("remarkTableBody")
   if (!tbody) {
-    alert("ERROR: #remarkTableBody tidak ditemukan.");
-    return;
+    alert("ERROR: #remarkTableBody tidak ditemukan.")
+    return
   }
 
-  // ambil tanggal dari filter (kalau kosong, pakai hari ini)
-  const filterDateEl = document.getElementById("filterDate");
-  const filterDate = filterDateEl?.value || new Date().toISOString().split("T")[0];
-
-  const rows = Array.from(tbody.querySelectorAll("tr"));
+  const filterDate = document.getElementById("filterDate")?.value || new Date().toISOString().split("T")[0]
+  const rows = Array.from(tbody.querySelectorAll("tr"))
 
   // kalau tabel sedang menampilkan "Tidak ada NG hari ini"
   if (rows.length === 1) {
-    const tds = rows[0].querySelectorAll("td");
-    if (tds.length === 1 && (tds[0].textContent || "").includes("Tidak ada NG")) {
-      alert(`Tidak ada NG untuk tanggal ${filterDate}.`);
-      return;
+    const tds = rows[0].querySelectorAll("td")
+    if (tds.length === 1 && (tds[0].textContent || "").toLowerCase().includes("tidak ada ng")) {
+      alert(`Tidak ada NG untuk tanggal ${filterDate}.`)
+      return
     }
   }
 
-  // Header harus sama urutan dengan tabel kamu
-  const headers = ["Tanggal", "Channel", "Shift", "Master", "Remark", "Kategori", "Code"];
-
-  const esc = (v) => {
-    const s = String(v ?? "");
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-
-  const lines = [];
-  lines.push(headers.map(esc).join(","));
-
+  // Data: Tanggal | Channel | Shift | Master | Remark | Kategori | Code
+  const data = []
   rows.forEach((tr) => {
-    const cols = Array.from(tr.querySelectorAll("td")).map(td => (td.textContent || "").trim());
+    const cols = Array.from(tr.querySelectorAll("td")).map((td) => (td.textContent || "").trim())
+    if (cols.length >= 7) {
+      const rowDate = String(cols[0]).split("T")[0]
+      if (rowDate === filterDate) data.push(cols.slice(0, 7))
+    }
+  })
 
-    // pastikan row valid (punya 7 kolom)
-    if (cols.length < 7) return;
-
-    // OPTIONAL safety: hanya download yang tanggalnya cocok filterDate
-    // (karena data yang tampil harusnya sudah difilter, tapi ini biar aman)
-    const rowDate = String(cols[0]).split("T")[0];
-    if (rowDate !== filterDate) return;
-
-    lines.push(cols.slice(0, 7).map(esc).join(","));
-  });
-
-  if (lines.length === 1) {
-    alert(`Tidak ada NG untuk tanggal ${filterDate}.`);
-    return;
+  if (data.length === 0) {
+    alert(`Tidak ada NG untuk tanggal ${filterDate}.`)
+    return
   }
 
-  // Excel friendly (BOM)
-  const csv = "\uFEFF" + lines.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  // ===== Summary statistic =====
+  const countBy = (idx) => {
+    const map = {}
+    data.forEach((r) => {
+      const key = (r[idx] || "-").trim() || "-"
+      map[key] = (map[key] || 0) + 1
+    })
+    return map
+  }
 
-  const filename = `NG_Tracker_${filterDate}.csv`;
+  const topOne = (map) => {
+    let bestK = "-"
+    let bestV = 0
+    Object.entries(map).forEach(([k, v]) => {
+      if (v > bestV) {
+        bestK = k
+        bestV = v
+      }
+    })
+    return { key: bestK, val: bestV }
+  }
 
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  const topChannel = topOne(countBy(1))
+  const topCategory = topOne(countBy(5))
+  const topMaster = topOne(countBy(3))
+  const totalNG = data.length
 
-  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  const { jsPDF } = window.jspdf
+  const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" })
+
+  const pageW = doc.internal.pageSize.getWidth()
+  const pageH = doc.internal.pageSize.getHeight()
+
+  const now = new Date()
+  const pad2 = (n) => String(n).padStart(2, "0")
+  const generatedAt = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`
+
+  // ===== Watermark =====
+  doc.saveGraphicsState()
+  doc.setTextColor(210)
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(26)
+  doc.text("CONFIDENTIAL", pageW / 2, pageH / 2 - 10, { align: "center", angle: 25 })
+  doc.setFontSize(13)
+  doc.text("INTERNAL USE ONLY", pageW / 2, pageH / 2 + 5, { align: "center", angle: 25 })
+  doc.restoreGraphicsState()
+
+  // ===== Header =====
+  doc.setTextColor(20)
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(15)
+  doc.text("QA MASTER MANAGEMENT – NG TRACKER REPORT", 14, 18)
+
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(10.5)
+  doc.text("SKF Indonesia | Quality Assurance Department", 14, 24)
+
+  doc.setLineWidth(0.3)
+  doc.line(14, 28, pageW - 14, 28)
+
+  // ===== Report Information box =====
+  const boxX = 14
+  const boxY = 32
+  const boxW = pageW - 28
+  const boxH = 24
+
+  doc.setDrawColor(170)
+  doc.setLineWidth(0.2)
+  doc.rect(boxX, boxY, boxW, boxH)
+
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(11)
+  doc.text("Report Information", boxX + 3, boxY + 7)
+
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(10)
+
+  doc.text(`Date: ${filterDate}`, boxX + 3, boxY + 14)
+  doc.text(`Total NG: ${totalNG}`, boxX + boxW / 2 + 2, boxY + 14)
+
+  doc.setFontSize(9.5)
+  doc.text(`Generated at: ${generatedAt}`, boxX + 3, boxY + 20)
+
+  // ===== Section A =====
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(12)
+  doc.text("A. NG TRACKER DETAIL", 14, boxY + boxH + 10)
+
+  const body = data.map((r, i) => [String(i + 1), ...r]) // No + 7 kolom
+
+  doc.autoTable({
+    startY: boxY + boxH + 14,
+    head: [["No", "Tanggal", "Channel", "Shift", "Master", "Remark", "Kategori", "Code"]],
+    body,
+    theme: "grid",
+    styles: { font: "helvetica", fontSize: 8.8, cellPadding: 2 },
+    headStyles: { fontStyle: "bold" },
+    margin: { left: 14, right: 14 },
+    columnStyles: {
+      0: { cellWidth: 8 },
+      1: { cellWidth: 20 },
+      2: { cellWidth: 24 },
+      3: { cellWidth: 12 },
+      4: { cellWidth: 60 },
+      5: { cellWidth: 18 },
+      6: { cellWidth: 22 },
+      7: { cellWidth: 16 },
+    },
+  })
+
+  // ===== Section B: Summary =====
+  const afterTableY = doc.lastAutoTable.finalY + 10
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(12)
+  doc.text("B. SUMMARY", 14, afterTableY)
+
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(10)
+  doc.text(`• Total NG: ${totalNG}`, 16, afterTableY + 7)
+  doc.text(`• Top Channel: ${topChannel.key} (${topChannel.val})`, 16, afterTableY + 13)
+  doc.text(`• Top Category: ${topCategory.key} (${topCategory.val})`, 16, afterTableY + 19)
+  doc.text(`• Top Master: ${topMaster.key} (${topMaster.val})`, 16, afterTableY + 25)
+
+  // ===== Footer + Page Number =====
+  const pageCount = doc.getNumberOfPages()
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p)
+
+    doc.setDrawColor(200)
+    doc.setLineWidth(0.2)
+    doc.line(14, pageH - 18, pageW - 14, pageH - 18)
+
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(9)
+    doc.text("Prepared by: QA Master Management System", 14, pageH - 12)
+    doc.text("Approved by: ____________________", 14, pageH - 7)
+    doc.text(`Page ${p} / ${pageCount}`, pageW - 14, pageH - 10, { align: "right" })
+  }
+
+  doc.save(`NG_Tracker_Report_${filterDate}.pdf`)
 }
-
