@@ -4,33 +4,70 @@
 let selectedMasters = [];
 
 /* =========================
-   STEP NAVIGATION
+   DOM READY
 ========================= */
-document.getElementById("basicInfoForm").addEventListener("submit", function (e) {
-    e.preventDefault();
-    goToStep2();
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("[v0] Form.js loaded");
+
+    const basicForm = document.getElementById("basicInfoForm");
+    const masterForm = document.getElementById("masterCheckForm");
+
+    if (basicForm) {
+        basicForm.addEventListener("submit", function (e) {
+            e.preventDefault();
+            goToStep2();
+        });
+    }
+
+    if (masterForm) {
+        masterForm.addEventListener("submit", function (e) {
+            e.preventDefault();
+            submitData();
+        });
+    }
 });
 
+/* =========================
+   STEP NAVIGATION
+========================= */
 function goToStep1() {
-    document.getElementById("step2").style.display = "none";
-    document.getElementById("step1").classList.add("active");
+    const step1 = document.getElementById("step1");
+    const step2 = document.getElementById("step2");
+
+    if (step1) step1.classList.add("active");
+    if (step2) step2.style.display = "none";
 }
 
 /* =========================
-   STEP 2 : RENDER MASTER
+   STEP 2 : LOAD & RENDER
 ========================= */
 function goToStep2() {
-    const channel = document.getElementById("channel").value;
-    const category = document.getElementById("category").value;
+    const channelEl = document.getElementById("channel");
+    const categoryEl = document.getElementById("category");
+
+    if (!channelEl || !categoryEl) {
+        alert("Element channel / category tidak ditemukan");
+        return;
+    }
+
+    const channel = channelEl.value;
+    const category = categoryEl.value;
 
     if (!channel || !category) {
         alert("Channel dan Kategori harus dipilih");
         return;
     }
 
-    // FILTER DATA DARI config.js
+    if (typeof MASTER_DATA === "undefined") {
+        alert("MASTER_DATA belum dimuat (cek config.js)");
+        return;
+    }
+
+    console.log("[Debug] Channel dipilih:", channel);
+
+    // FILTER DATA
     selectedMasters = MASTER_DATA.filter(item =>
-        item.channel == channel &&
+        String(item.channel) === String(channel) &&
         item.category.toLowerCase() === category.toLowerCase()
     );
 
@@ -40,23 +77,40 @@ function goToStep2() {
     }
 
     // INFO HEADER
-    document.getElementById("selectedChannel").innerText = channel;
-    document.getElementById("totalMasters").innerText = selectedMasters.length;
+    const channelSpan = document.getElementById("selectedChannel");
+    const totalSpan = document.getElementById("totalMasters");
 
-    // SIMPAN KE SESSION
+    if (!channelSpan || !totalSpan) {
+        alert("Header info Step 2 tidak lengkap");
+        return;
+    }
+
+    channelSpan.innerText = channel;
+    totalSpan.innerText = selectedMasters.length;
+
     sessionStorage.setItem("displayedMasters", JSON.stringify(selectedMasters));
 
-    renderMasterCards(selectedMasters);
+    // TAMPILKAN STEP 2 DULU (PENTING)
+    const step1 = document.getElementById("step1");
+    const step2 = document.getElementById("step2");
 
-    document.getElementById("step1").classList.remove("active");
-    document.getElementById("step2").style.display = "block";
+    if (step1) step1.classList.remove("active");
+    if (step2) step2.style.display = "block";
+
+    renderMasterCards(selectedMasters);
 }
 
 /* =========================
-   RENDER MASTER CARD
+   RENDER MASTER CARDS
 ========================= */
 function renderMasterCards(masters) {
     const masterList = document.getElementById("masterList");
+
+    if (!masterList) {
+        console.error("Element #masterList tidak ditemukan");
+        return;
+    }
+
     masterList.innerHTML = "";
 
     masters.forEach((master, index) => {
@@ -87,11 +141,11 @@ function renderMasterCards(masters) {
                     </label>
                 </div>
 
-                <div class="remark-input numeric-input" id="numericInput_${index}">
+                <div class="remark-input" id="numericInput_${index}">
                     <textarea placeholder="Isi angka / perubahan nilai"></textarea>
                 </div>
 
-                <div class="remark-input text-input" id="textInput_${index}" style="display:none;">
+                <div class="remark-input" id="textInput_${index}" style="display:none;">
                     <textarea placeholder="Isi keterangan"></textarea>
                 </div>
             </div>
@@ -117,6 +171,7 @@ function renderMasterCards(masters) {
 function selectStatus(index, status) {
     const items = document.querySelectorAll(".master-item");
     const item = items[index];
+    if (!item) return;
 
     const okBtn = item.querySelector(".btn-ok");
     const ngBtn = item.querySelector(".btn-ng");
@@ -127,27 +182,24 @@ function selectStatus(index, status) {
 
     if (status === "OK") {
         okBtn.classList.add("active");
-        remark.style.display = "none";
+        if (remark) remark.style.display = "none";
     } else {
         ngBtn.classList.add("active");
-        remark.style.display = "block";
+        if (remark) remark.style.display = "block";
     }
 }
 
 /* =========================
    SUBMIT DATA
 ========================= */
-document.getElementById("masterCheckForm").addEventListener("submit", function (e) {
-    e.preventDefault();
-    submitData();
-});
-
 function submitData() {
-    const masters = JSON.parse(sessionStorage.getItem("displayedMasters"));
+    const masters = JSON.parse(sessionStorage.getItem("displayedMasters")) || [];
     const results = [];
 
     for (let i = 0; i < masters.length; i++) {
         const item = document.querySelectorAll(".master-item")[i];
+        if (!item) continue;
+
         const okBtn = item.querySelector(".btn-ok");
         const ngBtn = item.querySelector(".btn-ng");
 
@@ -185,7 +237,5 @@ function submitData() {
     }
 
     console.log("HASIL SUBMIT:", results);
-
-    alert("Data berhasil divalidasi (cek console)");
-    // 👉 lanjutkan kirim ke backend / Apps Script
+    alert("Data valid. Silakan lanjutkan kirim ke backend.");
 }
