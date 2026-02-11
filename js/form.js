@@ -1,319 +1,496 @@
-// ==========================================
-// 1. DEKLARASI DATA MASTER (KOSONG)
-// ==========================================
-// Data ini akan diisi secara dinamis dari Google Sheets (CSV)
+// =====================================================
+// form.js (UI LAMA) + MASTER DATA DARI GOOGLE SHEETS CSV
+// =====================================================
+//
+// CSV wajib punya header: Channel,BearingType,Category,Name,Code
+// - Channel boleh "1" atau "Channel 1" (dinormalisasi jadi "1").
+// - Category untuk data: "gauging" / "Pokayoke"
+// - Clearance di UI: ambil dari category "Pokayoke" dan name "Clearance Check - C2/Cn/C3/C4/C5"
+//   lalu ambil prev-now-next sesuai tipe clearance running.
+
 let MASTER_DATA = [];
+let CHANNEL_MASTERS = {};
 
-// ==========================================
-// 2. FUNGSI FETCH DATA DARI GOOGLE SHEETS
-// ==========================================
+function cleanStr(v) {
+  return String(v ?? "").replace(/(^"|"$)/g, "").trim();
+}
+
+function normalizeChannel(raw) {
+  const s = cleanStr(raw);
+  const m = s.match(/(\d+)/); // "Channel 1" -> "1"
+  return m ? m[1] : s;
+}
+
+// CSV parser yang aman (handle koma di dalam quote)
+function parseCsvLine(line) {
+  const out = [];
+  let cur = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    // escaped quote: ""
+    if (ch === '"' && line[i + 1] === '"') {
+      cur += '"';
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (ch === "," && !inQuotes) {
+      out.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+function buildChannelMastersFromMasterData() {
+  const obj = {};
+
+  for (const row of MASTER_DATA) {
+    const channel = normalizeChannel(row.channel);
+    const bearingType = cleanStr(row.bearingType);
+    const category = cleanStr(row.category); // "gauging" / "Pokayoke"
+    const name = cleanStr(row.name);
+    const code = cleanStr(row.code);
+
+    if (!channel || !bearingType || !category || !name) continue;
+
+    obj[channel] ??= {};
+    obj[channel][bearingType] ??= {};
+    obj[channel][bearingType][category] ??= [];
+    obj[channel][bearingType][category].push({ name, code });
+  }
+
+  CHANNEL_MASTERS = obj;
+}
+
 async function fetchMasterData() {
-    const loadingModal = document.getElementById("loadingModal");
-    if (loadingModal) loadingModal.classList.add("show");
-    
-    try {
-        // Link CSV dari Google Sheets yang di-publish
-        const masterDataUrl = window.CONFIG?.MASTER_DATA_URL || "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrVEMf_DG702fbz5Gy12__YvNYc1lNXTW-gFcZbV5J0NSndYYvjQb_HmjsEWImsZBLAEZqlTs9eLDh/pub?gid=0&single=true&output=csv";
-        
-        console.log("[v0] Memuat data master dari Sheets...");
-        const response = await fetch(masterDataUrl);
-        
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
-        // Membaca response sebagai teks (karena formatnya CSV)
-        const csvText = await response.text();
-        
-        // Parsing CSV menjadi Array of Objects
-        // Asumsi format kolom di Sheets: Channel, BearingType, Category, Name, Code
-        const rows = csvText.split('\n');
-        MASTER_DATA = [];
-        
-        // Fungsi pembersih tanda kutip ganda ("") dan spasi berlebih bawaan CSV
-        const cleanStr = (str) => str ? str.replace(/(^"|"$)/g, '').trim() : "";
+  const loadingModal = document.getElementById("loadingModal");
+  const modalText = loadingModal?.querySelector("p");
+  if (modalText) modalText.textContent = "Memuat data master...";
+  if (loadingModal) loadingModal.classList.add("show");
 
-        // Mulai dari i = 1 untuk mengabaikan baris Header
-        for (let i = 1; i < rows.length; i++) { 
-            const rowText = rows[i].trim();
-            if (!rowText) continue; // Lewati baris kosong
-            
-            // Pisahkan berdasarkan koma
-            const cols = rowText.split(','); 
-            
-            MASTER_DATA.push({
-                channel: cleanStr(cols[0]),
-                bearingType: cleanStr(cols[1]),
-                category: cleanStr(cols[2]),
-                name: cleanStr(cols[3]),
-                code: cleanStr(cols[4])
-            });
-        }
-        
-        console.log("[v0] Data master berhasil dimuat:", MASTER_DATA.length, "baris");
-        
-    } catch (error) {
-        console.error("[v0] Error fetching master data:", error);
-        alert("Gagal memuat data master dari Google Sheets. Pastikan koneksi internet stabil.");
-    } finally {
-        if (loadingModal) loadingModal.classList.remove("show");
-    }
-}
+  try {
+    const url = window.CONFIG?.MASTER_DATA_URL;
+    if (!url) throw new Error("CONFIG.MASTER_DATA_URL belum di-set di config.js");
 
-// ==========================================
-// 3. INISIALISASI & EVENT LISTENER (SAAT HALAMAN DIMUAT)
-// ==========================================
-document.addEventListener("DOMContentLoaded", async () => {
-    console.log("[v0] Form.js loaded");
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    // Tunggu sampai data master selesai dimuat sebelum user bisa berinteraksi
-    await fetchMasterData();
+    const csvText = await res.text();
+    const lines = csvText.split(/\r?\n/).filter(l => l.trim() !== "");
+    if (lines.length < 2) throw new Error("CSV kosong / header tidak ada");
 
-    // Set tanggal hari ini sebagai default
-    const today = new Date().toISOString().split("T")[0];
-    const tanggalInput = document.getElementById("tanggal");
-    if (tanggalInput) tanggalInput.value = today;
-
-    // Handle form Step 1 (Basic Info)
-    document.getElementById("basicInfoForm").addEventListener("submit", (e) => {
-        e.preventDefault();
-        goToStep2();
-    });
-
-    // Handle form Step 2 (Master Check Form / Tabel Data)
-    document.getElementById("masterCheckForm").addEventListener("submit", (e) => {
-        e.preventDefault();
-        submitData();
-    });
-
-    // Handle Dropdown Channel -> Filter Bearing Type
-    document.getElementById("channel").addEventListener("change", function () {
-        const selectedChannel = String(this.value).trim();
-        console.log("[Debug] Channel dipilih di UI:", selectedChannel);
-
-        const bearingSelect = document.getElementById("bearingType");
-        bearingSelect.innerHTML = '<option value="">--Pilih Tipe--</option>';
-
-        if (MASTER_DATA.length === 0) {
-            alert("Data master belum termuat, silakan refresh halaman.");
-            return;
-        }
-
-        // Cari tipe bearing dan gunakan logika yang lebih longgar (loose matching)
-        const uniqueBearings = [...new Set(
-            MASTER_DATA
-                // Toleransi jika Sheets menulis "Channel 1" sedangkan UI valuenya "1" (atau sebaliknya)
-                .filter(item => item.channel === selectedChannel || item.channel.includes(selectedChannel))
-                .map(item => item.bearingType)
-                .filter(type => type !== "") // Buang baris yang bearing-nya kosong
-        )];
-
-        console.log("[Debug] Bearing Type yang ditemukan:", uniqueBearings);
-
-        uniqueBearings.forEach(type => {
-            const opt = document.createElement("option");
-            opt.value = type;
-            opt.textContent = type;
-            bearingSelect.appendChild(opt);
-        });
-    });
-
-    // Handle Toggle Kategori Clearance
-    document.getElementById("category").addEventListener("change", function () {
-        const field = document.getElementById("clearanceField");
-        if (!field) return;
-
-        if (this.value === "Clearance") {
-            field.style.display = "block";
-        } else {
-            field.style.display = "none";
-            const clType = document.getElementById("clearanceType");
-            if (clType) clType.value = "";
-        }
-    });
-});
-
-// ==========================================
-// 4. LOGIKA PINDAH KE STEP 2 (MEMBENTUK TABEL HTML)
-// ==========================================
-function goToStep2() {
-    const tanggal = document.getElementById("tanggal").value;
-    const shift = document.getElementById("shift").value;
-    const npk = document.getElementById("npk").value;
-    const channel = document.getElementById("channel").value;
-    const bearingType = document.getElementById("bearingType").value;
-    const category = document.getElementById("category").value;
-
-    if (!tanggal || !shift || !npk || !channel || !bearingType || !category) {
-        alert("Lengkapi semua field informasi dasar!");
-        return;
-    }
-
-    // Simpan ke Session Storage untuk keperluan saat submit nanti
-    sessionStorage.setItem("tanggal", tanggal);
-    sessionStorage.setItem("shift", shift);
-    sessionStorage.setItem("npk", npk);
-    sessionStorage.setItem("channel", channel);
-    sessionStorage.setItem("bearingType", bearingType);
-    
-    // Jika user memilih Clearance, kita simpan secara sistem sebagai "Pokayoke"
-    const actualCategory = (category === "Clearance") ? "Pokayoke" : category;
-    sessionStorage.setItem("category", actualCategory);
-
-    // Filter data master dari array (gunakan includes agar toleran terhadap spasi/perbedaan format kecil)
-    let masters = MASTER_DATA.filter(item =>
-        (item.channel === channel || item.channel.includes(channel)) &&
-        item.bearingType === bearingType &&
-        (
-            category === "Clearance"
-                ? item.category === "Pokayoke" && /Clearance Check - (C2|Cn|C3|C4|C5)/.test(item.name)
-                : item.category === category
-        )
-    );
-
-    // Jika pilih Pokayoke biasa, saring dan hilangkan item Clearance
-    if (category === "Pokayoke") {
-        masters = masters.filter(item =>
-            !/Clearance Check - (C2|Cn|C3|C4|C5)/.test(item.name)
-        );
-    }
-
-    if (masters.length === 0) {
-        alert(`Data master tidak ditemukan untuk Channel ${channel}, Tipe ${bearingType}, Kategori ${category}!`);
-        return;
-    }
-
-    // Tampilkan informasi ke UI (jika elemennya ada)
-    const selectedChannelEl = document.getElementById("selectedChannel");
-    if (selectedChannelEl) selectedChannelEl.textContent = channel;
-    
-    const totalMastersEl = document.getElementById("totalMasters");
-    if (totalMastersEl) totalMastersEl.textContent = masters.length;
-
-    // Render ke dalam Tabel (Table Body)
-    const tableBody = document.getElementById("tableBody");
-    tableBody.innerHTML = "";
-
-    masters.forEach((item, index) => {
-        const row = document.createElement("tr");
-        
-        // Simpan metadata ke elemen baris (dataset) agar mudah diambil saat submit
-        row.dataset.code = item.code;
-        row.dataset.name = item.name;
-
-        row.innerHTML = `
-            <td>${index + 1}</td>
-            <td>${item.name} <br><small style="color: gray;">(${item.code})</small></td>
-            <td>
-                <select class="status-select" required>
-                    <option value="">Pilih</option>
-                    <option value="OK">OK</option>
-                    <option value="NG">NG</option>
-                </select>
-            </td>
-            <td>
-                <input type="text" class="remark-input" placeholder="Isi remark jika NG">
-            </td>
-        `;
-
-        tableBody.appendChild(row);
-    });
-
-    // Pindah Tampilan (Asumsi CSS Anda menggunakan class .active untuk menampilkan form)
-    document.getElementById("step1").classList.remove("active");
-    document.getElementById("step1").style.display = "none";
-    document.getElementById("step2").classList.add("active");
-    document.getElementById("step2").style.display = "block";
-}
-
-// ==========================================
-// 5. KEMBALI KE STEP 1
-// ==========================================
-function goToStep1() {
-    document.getElementById("step2").classList.remove("active");
-    document.getElementById("step2").style.display = "none";
-    document.getElementById("step1").classList.add("active");
-    document.getElementById("step1").style.display = "block";
-}
-
-// ==========================================
-// 6. VALIDASI & KIRIM DATA KE GOOGLE APPS SCRIPT
-// ==========================================
-async function submitData() {
-    const tableBody = document.getElementById("tableBody");
-    const rows = tableBody.querySelectorAll("tr");
-    const masterResults = [];
-
-    // Validasi input di dalam tabel
-    for (let row of rows) {
-        const name = row.dataset.name;
-        const code = row.dataset.code;
-        const statusEl = row.querySelector(".status-select");
-        const remarkEl = row.querySelector(".remark-input");
-
-        const status = statusEl.value;
-        const remark = remarkEl.value.trim();
-
-        if (!status) {
-            alert(`Mohon pilih status (OK/NG) untuk pengecekan: ${name}`);
-            statusEl.focus();
-            return;
-        }
-
-        // Jika NG, remark wajib diisi
-        if (status === "NG" && !remark) {
-            alert(`Mohon isi kolom Remark untuk pengecekan yang NG: ${name}`);
-            remarkEl.focus();
-            return;
-        }
-
-        masterResults.push({
-            name: name,
-            code: code,
-            status: status,
-            remark: remark
-        });
-    }
-
-    // Persiapkan Payload Data JSON
-    const dataToSend = {
-        tanggal: sessionStorage.getItem("tanggal"),
-        shift: sessionStorage.getItem("shift"),
-        npk: sessionStorage.getItem("npk"),
-        channel: `Channel ${sessionStorage.getItem("channel")}`,
-        bearingType: sessionStorage.getItem("bearingType"),
-        category: sessionStorage.getItem("category"),
-        masters: masterResults
+    const headerCols = parseCsvLine(lines[0]).map(h => cleanStr(h).toLowerCase());
+    const idx = {
+      channel: headerCols.indexOf("channel"),
+      bearingType: headerCols.indexOf("bearingtype"),
+      category: headerCols.indexOf("category"),
+      name: headerCols.indexOf("name"),
+      code: headerCols.indexOf("code"),
     };
 
-    console.log("[v0] Data to send:", JSON.stringify(dataToSend, null, 2));
-
-    const appsScriptUrl = window.CONFIG?.APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbytpHuYFDR_G-sugVMYFVpEbw1uQObHt68HiiRsuo01YybVLh_otjhjW971CO9QrH5gtA/exec";
-    const loadingModal = document.getElementById("loadingModal");
-    
-    if (loadingModal) loadingModal.classList.add("show");
-
-    try {
-        // Proses POST ke Google Apps Script
-        const response = await fetch(appsScriptUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "text/plain;charset=utf-8",
-            },
-            body: JSON.stringify(dataToSend),
-        });
-
-        const result = await response.text();
-        console.log("[v0] Response:", result);
-
-        alert("Data berhasil disimpan!");
-        sessionStorage.clear();
-        
-        // Redirect ke dashboard atau reset ulang form
-        window.location.href = "dashboard.html"; 
-
-    } catch (error) {
-        console.error("[v0] Submit Error:", error);
-        alert("Gagal menyimpan data. Silakan coba lagi.\nError: " + error.message);
-    } finally {
-        if (loadingModal) loadingModal.classList.remove("show");
+    if (Object.values(idx).some(v => v === -1)) {
+      throw new Error("Header CSV harus mengandung: Channel,BearingType,Category,Name,Code");
     }
+
+    MASTER_DATA = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCsvLine(lines[i]).map(cleanStr);
+      if (cols.every(c => !c)) continue;
+
+      MASTER_DATA.push({
+        channel: cols[idx.channel],
+        bearingType: cols[idx.bearingType],
+        category: cols[idx.category],
+        name: cols[idx.name],
+        code: cols[idx.code],
+      });
+    }
+
+    buildChannelMastersFromMasterData();
+    console.log("[OK] Master loaded:", MASTER_DATA.length, "rows");
+  } catch (err) {
+    console.error("[ERR] fetchMasterData:", err);
+    alert("Gagal memuat data master dari Google Sheets.\n" + err.message);
+  } finally {
+    if (modalText) modalText.textContent = "Menyimpan data...";
+    if (loadingModal) loadingModal.classList.remove("show");
+  }
+}
+
+// ================================
+// INIT
+// ================================
+document.addEventListener("DOMContentLoaded", async () => {
+  // default tanggal hari ini
+  const today = new Date().toISOString().split("T")[0];
+  const tanggalEl = document.getElementById("tanggal");
+  if (tanggalEl) tanggalEl.value = today;
+
+  // disable dulu sampai master siap
+  const channelEl = document.getElementById("channel");
+  const bearingEl = document.getElementById("bearingType");
+  if (channelEl) channelEl.disabled = true;
+  if (bearingEl) bearingEl.disabled = true;
+
+  await fetchMasterData();
+
+  if (channelEl) channelEl.disabled = false;
+
+  document.getElementById("basicInfoForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    goToStep2();
+  });
+
+  document.getElementById("masterCheckForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    submitData();
+  });
+
+  // channel -> bearingType
+  document.getElementById("channel").addEventListener("change", function () {
+    const channel = this.value;
+    const bearingSelect = document.getElementById("bearingType");
+    bearingSelect.innerHTML = '<option value="">Pilih Tipe</option>';
+
+    if (CHANNEL_MASTERS[channel]) {
+      Object.keys(CHANNEL_MASTERS[channel]).forEach(type => {
+        const opt = document.createElement("option");
+        opt.value = type;
+        opt.textContent = type;
+        bearingSelect.appendChild(opt);
+      });
+      bearingSelect.disabled = false;
+    } else {
+      bearingSelect.disabled = true;
+    }
+  });
+
+  // toggle field clearance
+  document.getElementById("category").addEventListener("change", function () {
+    const field = document.getElementById("clearanceField");
+    if (!field) return;
+
+    if (this.value === "Clearance") {
+      field.style.display = "block";
+    } else {
+      field.style.display = "none";
+      const cl = document.getElementById("clearanceType");
+      if (cl) cl.value = "";
+    }
+  });
+});
+
+// ================================
+// STEP 2 (UI lama) + logic clearance
+// ================================
+function goToStep2() {
+  const tanggal = document.getElementById("tanggal").value;
+  const shift = document.getElementById("shift").value;
+  const npk = document.getElementById("npk").value;
+  const channel = document.getElementById("channel").value;
+  const bearingType = document.getElementById("bearingType").value;
+  const category = document.getElementById("category").value;
+
+  // clearance running wajib dipilih
+  let clearanceType = "";
+  if (category === "Clearance") {
+    clearanceType = document.getElementById("clearanceType")?.value;
+    if (!clearanceType) {
+      alert("Pilih tipe clearance yang sedang running!");
+      return;
+    }
+  }
+
+  if (!tanggal || !shift || !npk || !channel || !bearingType || !category) {
+    alert("Semua field harus diisi!");
+    return;
+  }
+
+  // simpan info (untuk submit)
+  sessionStorage.setItem("tanggal", tanggal);
+  sessionStorage.setItem("shift", shift);
+  sessionStorage.setItem("npk", npk);
+  sessionStorage.setItem("channel", channel);
+  sessionStorage.setItem("bearingType", bearingType);
+
+  // Clearance disimpan sebagai Pokayoke
+  const actualCategory = (category === "Clearance") ? "Pokayoke" : category;
+  sessionStorage.setItem("category", actualCategory);
+
+  // info header step2
+  const sc = document.getElementById("selectedChannel");
+  if (sc) sc.textContent = channel;
+
+  let masters = [];
+
+  if (category === "Clearance") {
+    const pokayokeMasters = CHANNEL_MASTERS[channel]?.[bearingType]?.["Pokayoke"];
+    if (!pokayokeMasters) {
+      alert("Data Pokayoke tidak ditemukan!");
+      return;
+    }
+
+    // ambil hanya clearance check
+    const map = {};
+    pokayokeMasters.forEach(item => {
+      const m = item.name.match(/Clearance Check - (C2|Cn|C3|C4|C5)/);
+      if (m) map[m[1]] = item;
+    });
+
+    const order = ["C2", "Cn", "C3", "C4", "C5"];
+    const idx = order.indexOf(clearanceType);
+    if (idx === -1) {
+      alert("Tipe clearance tidak valid!");
+      return;
+    }
+
+    // prev-now-next
+    if (idx > 0 && map[order[idx - 1]]) masters.push(map[order[idx - 1]]);
+    if (map[clearanceType]) masters.push(map[clearanceType]);
+    if (idx < order.length - 1 && map[order[idx + 1]]) masters.push(map[order[idx + 1]]);
+  } else {
+    const raw = CHANNEL_MASTERS[channel]?.[bearingType]?.[category] || [];
+    if (category === "Pokayoke") {
+      // Pokayoke biasa: buang clearance check
+      masters = raw.filter(item => !/Clearance Check - (C2|Cn|C3|C4|C5)/.test(item.name));
+    } else {
+      masters = raw;
+    }
+  }
+
+  if (!masters.length) {
+    alert(`Data master tidak ditemukan untuk Channel ${channel}, Tipe ${bearingType}, Kategori ${category}!`);
+    return;
+  }
+
+  const tm = document.getElementById("totalMasters");
+  if (tm) tm.textContent = masters.length;
+
+  // render UI lama ke #masterList
+  const masterList = document.getElementById("masterList");
+  masterList.innerHTML = "";
+
+  masters.forEach((item, index) => {
+    const label = `${item.name} (${item.code})`;
+
+    const masterItem = document.createElement("div");
+    masterItem.className = "master-item";
+    masterItem.innerHTML = `
+      <div class="master-item-header">
+        <div class="master-name">${index + 1}. ${label}</div>
+        <div class="status-buttons">
+          <button type="button" class="btn-ok" onclick="selectStatus(${index}, 'OK')">OK</button>
+          <button type="button" class="btn-ng" onclick="selectStatus(${index}, 'NG')">NG</button>
+        </div>
+      </div>
+
+      <div class="remark-field" id="remark-${index}" style="display:none;">
+        <label class="form-label">Jenis Remark</label>
+        <div class="remark-type-group">
+          <label><input type="radio" name="remarkType_${index}" value="numeric" checked> Perubahan nilai pada master</label>
+          <label><input type="radio" name="remarkType_${index}" value="text"> Lainnya: Keterangan</label>
+        </div>
+
+        <div class="remark-input numeric-input" id="numericInput_${index}">
+          <textarea class="remark-textarea" placeholder="Remark hanya boleh diisi jika ada perubahan nilai numerik pada master"></textarea>
+          <small class="error-msg" id="errorNumeric_${index}" style="color:red; display:none;"></small>
+        </div>
+
+        <div class="remark-input text-input" id="textInput_${index}" style="display:none;">
+          <textarea class="remark-textarea" placeholder="Remark diisi jika NG, dapat berupa problem yang terjadi. Tapi bukan perubahan nilai!"></textarea>
+        </div>
+      </div>
+    `;
+    masterList.appendChild(masterItem);
+
+    // toggle numeric/text
+    document.querySelectorAll(`input[name="remarkType_${index}"]`).forEach(radio => {
+      radio.addEventListener("change", function () {
+        const numericDiv = document.getElementById(`numericInput_${index}`);
+        const textDiv = document.getElementById(`textInput_${index}`);
+        const errorDiv = document.getElementById(`errorNumeric_${index}`);
+
+        if (this.value === "numeric") {
+          numericDiv.style.display = "block";
+          textDiv.style.display = "none";
+        } else {
+          numericDiv.style.display = "none";
+          textDiv.style.display = "block";
+        }
+        if (errorDiv) errorDiv.style.display = "none";
+      });
+    });
+  });
+
+  sessionStorage.setItem("displayedMasters", JSON.stringify(masters));
+
+  document.getElementById("step1").classList.remove("active");
+  document.getElementById("step2").classList.add("active");
+}
+
+function goToStep1() {
+  document.getElementById("step2").classList.remove("active");
+  document.getElementById("step1").classList.add("active");
+}
+
+// ================================
+// OK/NG UI lama
+// ================================
+function selectStatus(index, status) {
+  const masterItem = document.querySelectorAll(".master-item")[index];
+  const okBtn = masterItem.querySelector(".btn-ok");
+  const ngBtn = masterItem.querySelector(".btn-ng");
+  const remarkField = document.getElementById(`remark-${index}`);
+
+  okBtn.classList.remove("active");
+  ngBtn.classList.remove("active");
+
+  if (status === "OK") {
+    okBtn.classList.add("active");
+    remarkField.style.display = "none";
+
+    // reset ke numeric
+    const numericRadio = document.querySelector(`input[name="remarkType_${index}"][value="numeric"]`);
+    if (numericRadio) numericRadio.checked = true;
+    document.getElementById(`numericInput_${index}`).style.display = "block";
+    document.getElementById(`textInput_${index}`).style.display = "none";
+
+    const errorDiv = document.getElementById(`errorNumeric_${index}`);
+    if (errorDiv) errorDiv.style.display = "none";
+  } else {
+    ngBtn.classList.add("active");
+    remarkField.style.display = "block";
+
+    // default numeric
+    const numericRadio = document.querySelector(`input[name="remarkType_${index}"][value="numeric"]`);
+    if (numericRadio) numericRadio.checked = true;
+    document.getElementById(`numericInput_${index}`).style.display = "block";
+    document.getElementById(`textInput_${index}`).style.display = "none";
+
+    const errorDiv = document.getElementById(`errorNumeric_${index}`);
+    if (errorDiv) errorDiv.style.display = "none";
+  }
+}
+
+// ================================
+// SUBMIT + validasi angka remark numeric
+// ================================
+async function submitData() {
+  const masters = JSON.parse(sessionStorage.getItem("displayedMasters") || "[]");
+  if (!masters.length) {
+    alert("Data master kosong. Silakan ulangi.");
+    return;
+  }
+
+  const appsScriptUrl = window.CONFIG?.APPS_SCRIPT_URL;
+  if (!appsScriptUrl) {
+    alert("CONFIG.APPS_SCRIPT_URL belum di-set di config.js");
+    return;
+  }
+
+  const loadingModal = document.getElementById("loadingModal");
+  if (loadingModal) loadingModal.classList.add("show");
+
+  try {
+    const results = [];
+
+    for (let i = 0; i < masters.length; i++) {
+      const masterItem = document.querySelectorAll(".master-item")[i];
+      const okBtn = masterItem.querySelector(".btn-ok");
+      const ngBtn = masterItem.querySelector(".btn-ng");
+
+      const status =
+        okBtn.classList.contains("active") ? "OK" :
+        ngBtn.classList.contains("active") ? "NG" :
+        "";
+
+      const masterLabel = `${masters[i].name} (${masters[i].code})`;
+
+      if (!status) {
+        alert(`Mohon pilih status untuk: ${masterLabel}`);
+        return;
+      }
+
+      let remark = "";
+
+      if (status === "NG") {
+        const numericChecked = document.querySelector(`input[name="remarkType_${i}"][value="numeric"]`)?.checked;
+        const numericTA = document.getElementById(`numericInput_${i}`)?.querySelector("textarea");
+        const textTA = document.getElementById(`textInput_${i}`)?.querySelector("textarea");
+        const errorDiv = document.getElementById(`errorNumeric_${i}`);
+
+        if (numericChecked) {
+          remark = numericTA?.value.trim() || "";
+          if (!remark) {
+            if (errorDiv) {
+              errorDiv.textContent = "Wajib diisi karena memilih 'Perubahan nilai pada master'";
+              errorDiv.style.display = "block";
+            }
+            alert(`Mohon isi remark (numeric) untuk: ${masterLabel}`);
+            return;
+          }
+
+          const singleNum = /^[-+]?\d*\.?\d+$/;
+          const numList = /^([-+]?\d*\.?\d+)(;[-+]?\d*\.?\d+)*$/;
+
+          if (!singleNum.test(remark) && !numList.test(remark)) {
+            if (errorDiv) {
+              errorDiv.textContent = "Hanya boleh angka (misal: 0, -1, +3, atau -9;-10;-11)";
+              errorDiv.style.display = "block";
+            }
+            alert(`Format remark numeric tidak valid untuk: ${masterLabel}`);
+            return;
+          }
+          if (errorDiv) errorDiv.style.display = "none";
+        } else {
+          remark = textTA?.value.trim() || ""; // boleh kosong
+        }
+      }
+
+      results.push({
+        name: masters[i].name,
+        code: masters[i].code,
+        status,
+        remark
+      });
+    }
+
+    const payload = {
+      tanggal: sessionStorage.getItem("tanggal"),
+      shift: sessionStorage.getItem("shift"),
+      npk: sessionStorage.getItem("npk"),
+      channel: `Channel ${sessionStorage.getItem("channel")}`,
+      bearingType: sessionStorage.getItem("bearingType"),
+      category: sessionStorage.getItem("category"), // Clearance tersimpan sebagai Pokayoke
+      masters: results
+    };
+
+    const res = await fetch(appsScriptUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text();
+    console.log("[OK] submit response:", text);
+
+    alert("Data berhasil disimpan!");
+    sessionStorage.clear();
+    window.location.href = "dashboard.html";
+  } catch (err) {
+    console.error("[ERR] submitData:", err);
+    alert("Gagal menyimpan data.\n" + err.message);
+  } finally {
+    if (loadingModal) loadingModal.classList.remove("show");
+  }
 }
