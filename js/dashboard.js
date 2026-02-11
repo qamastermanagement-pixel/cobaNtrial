@@ -226,3 +226,80 @@ function updateNGTrackerTable(data) {
     tbody.appendChild(row);
   });
 }
+
+// ================================
+// DOWNLOAD NG TRACKER (CSV)
+// ================================
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("btnDownloadNG");
+  if (btn) btn.addEventListener("click", downloadNGCsv);
+});
+
+function downloadNGCsv() {
+  const tbody = document.getElementById("remarkTableBody");
+  if (!tbody) {
+    alert("ERROR: #remarkTableBody tidak ditemukan.");
+    return;
+  }
+
+  // ambil tanggal dari filter (kalau kosong, pakai hari ini)
+  const filterDateEl = document.getElementById("filterDate");
+  const filterDate = filterDateEl?.value || new Date().toISOString().split("T")[0];
+
+  const rows = Array.from(tbody.querySelectorAll("tr"));
+
+  // kalau tabel sedang menampilkan "Tidak ada NG hari ini"
+  if (rows.length === 1) {
+    const tds = rows[0].querySelectorAll("td");
+    if (tds.length === 1 && (tds[0].textContent || "").includes("Tidak ada NG")) {
+      alert(`Tidak ada NG untuk tanggal ${filterDate}.`);
+      return;
+    }
+  }
+
+  // Header harus sama urutan dengan tabel kamu
+  const headers = ["Tanggal", "Channel", "Shift", "Master", "Remark", "Kategori", "Code"];
+
+  const esc = (v) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const lines = [];
+  lines.push(headers.map(esc).join(","));
+
+  rows.forEach((tr) => {
+    const cols = Array.from(tr.querySelectorAll("td")).map(td => (td.textContent || "").trim());
+
+    // pastikan row valid (punya 7 kolom)
+    if (cols.length < 7) return;
+
+    // OPTIONAL safety: hanya download yang tanggalnya cocok filterDate
+    // (karena data yang tampil harusnya sudah difilter, tapi ini biar aman)
+    const rowDate = String(cols[0]).split("T")[0];
+    if (rowDate !== filterDate) return;
+
+    lines.push(cols.slice(0, 7).map(esc).join(","));
+  });
+
+  if (lines.length === 1) {
+    alert(`Tidak ada NG untuk tanggal ${filterDate}.`);
+    return;
+  }
+
+  // Excel friendly (BOM)
+  const csv = "\uFEFF" + lines.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+
+  const filename = `NG_Tracker_${filterDate}.csv`;
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
