@@ -158,20 +158,38 @@
                 </div>
 
                 <form id="masterCheckForm">
-                    <div class="table-responsive" style="margin-top: 20px; margin-bottom: 20px; overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead style="background-color: #f8f9fa;">
-                                <tr>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">No</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Item Pengecekan</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Status</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Remark</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tableBody">
-                            </tbody>
-                        </table>
+                    <div id="step2" class="form-step">
+                        <div class="info-alert">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12" y2="8"></line>
+                            </svg>
+                            <div>
+                                <p class="alert-title">Perhatian: Anda sedang mengisi untuk</p>
+                                <p class="alert-detail">
+                                    <strong>Channel <span id="selectedChannel"></span></strong> |
+                                    Total Master <strong><span id="totalMasters"></span></strong>
+                                </p>
+                            </div>
+                        </div>
+                    
+                        <form id="masterCheckForm">
+                            <!-- INI PENTING -->
+                            <div id="masterList"></div>
+                    
+                            <div class="form-actions">
+                                <button type="button" class="btn-back" onclick="goToStep1()">
+                                    <span style="font-size: 1.25rem;">←</span> Kembali
+                                </button>
+                                <button type="submit" class="btn-submit">Simpan Data</button>
+                                <a href="dashboard.html" class="btn-back">
+                                    Dashboard <span style="font-size: 1.25rem;">→</span>
+                                </a>
+                            </div>
+                        </form>
                     </div>
+
 
                     <div class="form-actions">
                         <button type="button" class="btn-back" onclick="goToStep1()">
