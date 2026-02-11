@@ -1,319 +1,191 @@
-// ==========================================
-// 1. DEKLARASI DATA MASTER (KOSONG)
-// ==========================================
-// Data ini akan diisi secara dinamis dari Google Sheets (CSV)
-let MASTER_DATA = [];
+/* =========================
+   GLOBAL STATE
+========================= */
+let selectedMasters = [];
 
-// ==========================================
-// 2. FUNGSI FETCH DATA DARI GOOGLE SHEETS
-// ==========================================
-async function fetchMasterData() {
-    const loadingModal = document.getElementById("loadingModal");
-    if (loadingModal) loadingModal.classList.add("show");
-    
-    try {
-        // Link CSV dari Google Sheets yang di-publish
-        const masterDataUrl = window.CONFIG?.MASTER_DATA_URL || "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrVEMf_DG702fbz5Gy12__YvNYc1lNXTW-gFcZbV5J0NSndYYvjQb_HmjsEWImsZBLAEZqlTs9eLDh/pub?gid=0&single=true&output=csv";
-        
-        console.log("[v0] Memuat data master dari Sheets...");
-        const response = await fetch(masterDataUrl);
-        
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
-        // Membaca response sebagai teks (karena formatnya CSV)
-        const csvText = await response.text();
-        
-        // Parsing CSV menjadi Array of Objects
-        // Asumsi format kolom di Sheets: Channel, BearingType, Category, Name, Code
-        const rows = csvText.split('\n');
-        MASTER_DATA = [];
-        
-        // Fungsi pembersih tanda kutip ganda ("") dan spasi berlebih bawaan CSV
-        const cleanStr = (str) => str ? str.replace(/(^"|"$)/g, '').trim() : "";
-
-        // Mulai dari i = 1 untuk mengabaikan baris Header
-        for (let i = 1; i < rows.length; i++) { 
-            const rowText = rows[i].trim();
-            if (!rowText) continue; // Lewati baris kosong
-            
-            // Pisahkan berdasarkan koma
-            const cols = rowText.split(','); 
-            
-            MASTER_DATA.push({
-                channel: cleanStr(cols[0]),
-                bearingType: cleanStr(cols[1]),
-                category: cleanStr(cols[2]),
-                name: cleanStr(cols[3]),
-                code: cleanStr(cols[4])
-            });
-        }
-        
-        console.log("[v0] Data master berhasil dimuat:", MASTER_DATA.length, "baris");
-        
-    } catch (error) {
-        console.error("[v0] Error fetching master data:", error);
-        alert("Gagal memuat data master dari Google Sheets. Pastikan koneksi internet stabil.");
-    } finally {
-        if (loadingModal) loadingModal.classList.remove("show");
-    }
-}
-
-// ==========================================
-// 3. INISIALISASI & EVENT LISTENER (SAAT HALAMAN DIMUAT)
-// ==========================================
-document.addEventListener("DOMContentLoaded", async () => {
-    console.log("[v0] Form.js loaded");
-
-    // Tunggu sampai data master selesai dimuat sebelum user bisa berinteraksi
-    await fetchMasterData();
-
-    // Set tanggal hari ini sebagai default
-    const today = new Date().toISOString().split("T")[0];
-    const tanggalInput = document.getElementById("tanggal");
-    if (tanggalInput) tanggalInput.value = today;
-
-    // Handle form Step 1 (Basic Info)
-    document.getElementById("basicInfoForm").addEventListener("submit", (e) => {
-        e.preventDefault();
-        goToStep2();
-    });
-
-    // Handle form Step 2 (Master Check Form / Tabel Data)
-    document.getElementById("masterCheckForm").addEventListener("submit", (e) => {
-        e.preventDefault();
-        submitData();
-    });
-
-    // Handle Dropdown Channel -> Filter Bearing Type
-    document.getElementById("channel").addEventListener("change", function () {
-        const selectedChannel = String(this.value).trim();
-        console.log("[Debug] Channel dipilih di UI:", selectedChannel);
-
-        const bearingSelect = document.getElementById("bearingType");
-        bearingSelect.innerHTML = '<option value="">--Pilih Tipe--</option>';
-
-        if (MASTER_DATA.length === 0) {
-            alert("Data master belum termuat, silakan refresh halaman.");
-            return;
-        }
-
-        // Cari tipe bearing dan gunakan logika yang lebih longgar (loose matching)
-        const uniqueBearings = [...new Set(
-            MASTER_DATA
-                // Toleransi jika Sheets menulis "Channel 1" sedangkan UI valuenya "1" (atau sebaliknya)
-                .filter(item => item.channel === selectedChannel || item.channel.includes(selectedChannel))
-                .map(item => item.bearingType)
-                .filter(type => type !== "") // Buang baris yang bearing-nya kosong
-        )];
-
-        console.log("[Debug] Bearing Type yang ditemukan:", uniqueBearings);
-
-        uniqueBearings.forEach(type => {
-            const opt = document.createElement("option");
-            opt.value = type;
-            opt.textContent = type;
-            bearingSelect.appendChild(opt);
-        });
-    });
-
-    // Handle Toggle Kategori Clearance
-    document.getElementById("category").addEventListener("change", function () {
-        const field = document.getElementById("clearanceField");
-        if (!field) return;
-
-        if (this.value === "Clearance") {
-            field.style.display = "block";
-        } else {
-            field.style.display = "none";
-            const clType = document.getElementById("clearanceType");
-            if (clType) clType.value = "";
-        }
-    });
+/* =========================
+   STEP NAVIGATION
+========================= */
+document.getElementById("basicInfoForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    goToStep2();
 });
 
-// ==========================================
-// 4. LOGIKA PINDAH KE STEP 2 (MEMBENTUK TABEL HTML)
-// ==========================================
+function goToStep1() {
+    document.getElementById("step2").style.display = "none";
+    document.getElementById("step1").classList.add("active");
+}
+
+/* =========================
+   STEP 2 : RENDER MASTER
+========================= */
 function goToStep2() {
-    const tanggal = document.getElementById("tanggal").value;
-    const shift = document.getElementById("shift").value;
-    const npk = document.getElementById("npk").value;
     const channel = document.getElementById("channel").value;
-    const bearingType = document.getElementById("bearingType").value;
     const category = document.getElementById("category").value;
 
-    if (!tanggal || !shift || !npk || !channel || !bearingType || !category) {
-        alert("Lengkapi semua field informasi dasar!");
+    if (!channel || !category) {
+        alert("Channel dan Kategori harus dipilih");
         return;
     }
 
-    // Simpan ke Session Storage untuk keperluan saat submit nanti
-    sessionStorage.setItem("tanggal", tanggal);
-    sessionStorage.setItem("shift", shift);
-    sessionStorage.setItem("npk", npk);
-    sessionStorage.setItem("channel", channel);
-    sessionStorage.setItem("bearingType", bearingType);
-    
-    // Jika user memilih Clearance, kita simpan secara sistem sebagai "Pokayoke"
-    const actualCategory = (category === "Clearance") ? "Pokayoke" : category;
-    sessionStorage.setItem("category", actualCategory);
-
-    // Filter data master dari array (gunakan includes agar toleran terhadap spasi/perbedaan format kecil)
-    let masters = MASTER_DATA.filter(item =>
-        (item.channel === channel || item.channel.includes(channel)) &&
-        item.bearingType === bearingType &&
-        (
-            category === "Clearance"
-                ? item.category === "Pokayoke" && /Clearance Check - (C2|Cn|C3|C4|C5)/.test(item.name)
-                : item.category === category
-        )
+    // FILTER DATA DARI config.js
+    selectedMasters = MASTER_DATA.filter(item =>
+        item.channel == channel &&
+        item.category.toLowerCase() === category.toLowerCase()
     );
 
-    // Jika pilih Pokayoke biasa, saring dan hilangkan item Clearance
-    if (category === "Pokayoke") {
-        masters = masters.filter(item =>
-            !/Clearance Check - (C2|Cn|C3|C4|C5)/.test(item.name)
-        );
-    }
-
-    if (masters.length === 0) {
-        alert(`Data master tidak ditemukan untuk Channel ${channel}, Tipe ${bearingType}, Kategori ${category}!`);
+    if (selectedMasters.length === 0) {
+        alert("Master tidak ditemukan");
         return;
     }
 
-    // Tampilkan informasi ke UI (jika elemennya ada)
-    const selectedChannelEl = document.getElementById("selectedChannel");
-    if (selectedChannelEl) selectedChannelEl.textContent = channel;
-    
-    const totalMastersEl = document.getElementById("totalMasters");
-    if (totalMastersEl) totalMastersEl.textContent = masters.length;
+    // INFO HEADER
+    document.getElementById("selectedChannel").innerText = channel;
+    document.getElementById("totalMasters").innerText = selectedMasters.length;
 
-    // Render ke dalam Tabel (Table Body)
-    const tableBody = document.getElementById("tableBody");
-    tableBody.innerHTML = "";
+    // SIMPAN KE SESSION
+    sessionStorage.setItem("displayedMasters", JSON.stringify(selectedMasters));
 
-    masters.forEach((item, index) => {
-        const row = document.createElement("tr");
-        
-        // Simpan metadata ke elemen baris (dataset) agar mudah diambil saat submit
-        row.dataset.code = item.code;
-        row.dataset.name = item.name;
+    renderMasterCards(selectedMasters);
 
-        row.innerHTML = `
-            <td>${index + 1}</td>
-            <td>${item.name} <br><small style="color: gray;">(${item.code})</small></td>
-            <td>
-                <select class="status-select" required>
-                    <option value="">Pilih</option>
-                    <option value="OK">OK</option>
-                    <option value="NG">NG</option>
-                </select>
-            </td>
-            <td>
-                <input type="text" class="remark-input" placeholder="Isi remark jika NG">
-            </td>
-        `;
-
-        tableBody.appendChild(row);
-    });
-
-    // Pindah Tampilan (Asumsi CSS Anda menggunakan class .active untuk menampilkan form)
     document.getElementById("step1").classList.remove("active");
-    document.getElementById("step1").style.display = "none";
-    document.getElementById("step2").classList.add("active");
     document.getElementById("step2").style.display = "block";
 }
 
-// ==========================================
-// 5. KEMBALI KE STEP 1
-// ==========================================
-function goToStep1() {
-    document.getElementById("step2").classList.remove("active");
-    document.getElementById("step2").style.display = "none";
-    document.getElementById("step1").classList.add("active");
-    document.getElementById("step1").style.display = "block";
+/* =========================
+   RENDER MASTER CARD
+========================= */
+function renderMasterCards(masters) {
+    const masterList = document.getElementById("masterList");
+    masterList.innerHTML = "";
+
+    masters.forEach((master, index) => {
+        const card = document.createElement("div");
+        card.className = "master-item";
+
+        card.innerHTML = `
+            <div class="master-item-header">
+                <div class="master-name">
+                    ${index + 1}. ${master.name} (${master.code})
+                </div>
+                <div class="status-buttons">
+                    <button type="button" class="btn-ok" onclick="selectStatus(${index}, 'OK')">OK</button>
+                    <button type="button" class="btn-ng" onclick="selectStatus(${index}, 'NG')">NG</button>
+                </div>
+            </div>
+
+            <div class="remark-field" id="remark-${index}" style="display:none;">
+                <label>Jenis Remark</label>
+                <div class="remark-type-group">
+                    <label>
+                        <input type="radio" name="remarkType_${index}" value="numeric" checked>
+                        Perubahan nilai pada master
+                    </label>
+                    <label>
+                        <input type="radio" name="remarkType_${index}" value="text">
+                        Lainnya
+                    </label>
+                </div>
+
+                <div class="remark-input numeric-input" id="numericInput_${index}">
+                    <textarea placeholder="Isi angka / perubahan nilai"></textarea>
+                </div>
+
+                <div class="remark-input text-input" id="textInput_${index}" style="display:none;">
+                    <textarea placeholder="Isi keterangan"></textarea>
+                </div>
+            </div>
+        `;
+
+        masterList.appendChild(card);
+
+        // TOGGLE REMARK TYPE
+        document.querySelectorAll(`input[name="remarkType_${index}"]`).forEach(radio => {
+            radio.addEventListener("change", function () {
+                document.getElementById(`numericInput_${index}`).style.display =
+                    this.value === "numeric" ? "block" : "none";
+                document.getElementById(`textInput_${index}`).style.display =
+                    this.value === "text" ? "block" : "none";
+            });
+        });
+    });
 }
 
-// ==========================================
-// 6. VALIDASI & KIRIM DATA KE GOOGLE APPS SCRIPT
-// ==========================================
-async function submitData() {
-    const tableBody = document.getElementById("tableBody");
-    const rows = tableBody.querySelectorAll("tr");
-    const masterResults = [];
+/* =========================
+   STATUS HANDLER
+========================= */
+function selectStatus(index, status) {
+    const items = document.querySelectorAll(".master-item");
+    const item = items[index];
 
-    // Validasi input di dalam tabel
-    for (let row of rows) {
-        const name = row.dataset.name;
-        const code = row.dataset.code;
-        const statusEl = row.querySelector(".status-select");
-        const remarkEl = row.querySelector(".remark-input");
+    const okBtn = item.querySelector(".btn-ok");
+    const ngBtn = item.querySelector(".btn-ng");
+    const remark = document.getElementById(`remark-${index}`);
 
-        const status = statusEl.value;
-        const remark = remarkEl.value.trim();
+    okBtn.classList.remove("active");
+    ngBtn.classList.remove("active");
+
+    if (status === "OK") {
+        okBtn.classList.add("active");
+        remark.style.display = "none";
+    } else {
+        ngBtn.classList.add("active");
+        remark.style.display = "block";
+    }
+}
+
+/* =========================
+   SUBMIT DATA
+========================= */
+document.getElementById("masterCheckForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    submitData();
+});
+
+function submitData() {
+    const masters = JSON.parse(sessionStorage.getItem("displayedMasters"));
+    const results = [];
+
+    for (let i = 0; i < masters.length; i++) {
+        const item = document.querySelectorAll(".master-item")[i];
+        const okBtn = item.querySelector(".btn-ok");
+        const ngBtn = item.querySelector(".btn-ng");
+
+        let status = null;
+        if (okBtn.classList.contains("active")) status = "OK";
+        if (ngBtn.classList.contains("active")) status = "NG";
 
         if (!status) {
-            alert(`Mohon pilih status (OK/NG) untuk pengecekan: ${name}`);
-            statusEl.focus();
+            alert(`Status belum dipilih: ${masters[i].name}`);
             return;
         }
 
-        // Jika NG, remark wajib diisi
-        if (status === "NG" && !remark) {
-            alert(`Mohon isi kolom Remark untuk pengecekan yang NG: ${name}`);
-            remarkEl.focus();
-            return;
+        let remark = "";
+        if (status === "NG") {
+            const numericRadio = document.querySelector(`input[name="remarkType_${i}"][value="numeric"]`);
+            const numericText = document.querySelector(`#numericInput_${i} textarea`);
+            const textText = document.querySelector(`#textInput_${i} textarea`);
+
+            remark = numericRadio.checked
+                ? numericText.value.trim()
+                : textText.value.trim();
+
+            if (!remark) {
+                alert(`Remark wajib diisi: ${masters[i].name}`);
+                return;
+            }
         }
 
-        masterResults.push({
-            name: name,
-            code: code,
-            status: status,
-            remark: remark
+        results.push({
+            name: masters[i].name,
+            code: masters[i].code,
+            status,
+            remark
         });
     }
 
-    // Persiapkan Payload Data JSON
-    const dataToSend = {
-        tanggal: sessionStorage.getItem("tanggal"),
-        shift: sessionStorage.getItem("shift"),
-        npk: sessionStorage.getItem("npk"),
-        channel: `Channel ${sessionStorage.getItem("channel")}`,
-        bearingType: sessionStorage.getItem("bearingType"),
-        category: sessionStorage.getItem("category"),
-        masters: masterResults
-    };
+    console.log("HASIL SUBMIT:", results);
 
-    console.log("[v0] Data to send:", JSON.stringify(dataToSend, null, 2));
-
-    const appsScriptUrl = window.CONFIG?.APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbytpHuYFDR_G-sugVMYFVpEbw1uQObHt68HiiRsuo01YybVLh_otjhjW971CO9QrH5gtA/exec";
-    const loadingModal = document.getElementById("loadingModal");
-    
-    if (loadingModal) loadingModal.classList.add("show");
-
-    try {
-        // Proses POST ke Google Apps Script
-        const response = await fetch(appsScriptUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "text/plain;charset=utf-8",
-            },
-            body: JSON.stringify(dataToSend),
-        });
-
-        const result = await response.text();
-        console.log("[v0] Response:", result);
-
-        alert("Data berhasil disimpan!");
-        sessionStorage.clear();
-        
-        // Redirect ke dashboard atau reset ulang form
-        window.location.href = "dashboard.html"; 
-
-    } catch (error) {
-        console.error("[v0] Submit Error:", error);
-        alert("Gagal menyimpan data. Silakan coba lagi.\nError: " + error.message);
-    } finally {
-        if (loadingModal) loadingModal.classList.remove("show");
-    }
+    alert("Data berhasil divalidasi (cek console)");
+    // 👉 lanjutkan kirim ke backend / Apps Script
 }
