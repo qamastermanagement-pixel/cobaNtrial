@@ -2,11 +2,26 @@ let allData = []
 let chartInstance = null
 
 // ================================
+// LOADING MODAL FUNCTIONS
+// ================================
+function showLoading(text = "Memuat data...") {
+  const modal = document.getElementById("loadingModal")
+  const label = document.getElementById("loadingText")
+  if (label) label.textContent = text
+  if (modal) modal.classList.add("show")
+}
+
+function hideLoading() {
+  const modal = document.getElementById("loadingModal")
+  if (modal) modal.classList.remove("show")
+}
+
+// ================================
 // INIT
 // ================================
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("[v2] Dashboard.js loaded")
-  console.log("[v2] CONFIG:", window.CONFIG)
+  console.log("[v3] Dashboard.js loaded")
+  console.log("[v3] CONFIG:", window.CONFIG)
 
   // default date = today
   const today = new Date().toISOString().split("T")[0]
@@ -14,9 +29,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   loadData()
 
-  document
-    .getElementById("filterDate")
-    .addEventListener("change", filterAndDisplayData)
+  document.getElementById("filterDate").addEventListener("change", () => {
+    showLoading("Memuat data...")
+    setTimeout(() => {
+      filterAndDisplayData()
+      hideLoading()
+    }, 200)
+  })
 
   // PDF button
   const btnPdf = document.getElementById("btnDownloadNGPdf")
@@ -27,24 +46,30 @@ document.addEventListener("DOMContentLoaded", () => {
 // LOAD DATA
 // ================================
 async function loadData() {
+  showLoading("Memuat data dashboard...")
+
   try {
-    console.log("[v2] Fetching data...")
+    console.log("[v3] Fetching data...")
     const res = await fetch(window.CONFIG.APPS_SCRIPT_URL)
     const result = await res.json()
 
     if (result.status === "success") {
       allData = result.data || []
-      console.log("[v2] Data loaded:", allData.length)
+      console.log("[v3] Data loaded:", allData.length)
     } else {
       allData = []
-      console.error("[v2] API error:", result.message)
+      console.error("[v3] API error:", result.message)
+      alert("Gagal memuat data dashboard: " + (result.message || "unknown error"))
     }
 
     filterAndDisplayData()
   } catch (err) {
-    console.error("[v2] Fetch failed:", err)
+    console.error("[v3] Fetch failed:", err)
     allData = []
     filterAndDisplayData()
+    alert("Gagal memuat data. Cek koneksi / Apps Script.\n" + err.message)
+  } finally {
+    hideLoading()
   }
 }
 
@@ -53,14 +78,14 @@ async function loadData() {
 // ================================
 function filterAndDisplayData() {
   const filterDate = document.getElementById("filterDate").value
-  console.log("[v2] Filter date:", filterDate)
+  console.log("[v3] Filter date:", filterDate)
 
   const filteredData = allData.filter((entry) => {
     const entryDate = String(entry.Tanggal).split("T")[0]
     return entryDate === filterDate
   })
 
-  console.log("[v2] Filtered:", filteredData.length)
+  console.log("[v3] Filtered:", filteredData.length)
 
   updateStats(filteredData)
   updateChannelTable(filteredData)
@@ -69,12 +94,12 @@ function filterAndDisplayData() {
 }
 
 // ================================
-// STATS (COVERAGE BASED ON CHANNEL)
+// STATS
 // ================================
 function updateStats(data) {
   const TOTAL_CHANNELS = 16
   const TOTAL_SHIFTS = 3
-  const TOTAL_CHECKPOINTS = TOTAL_CHANNELS * TOTAL_SHIFTS // 48
+  const TOTAL_CHECKPOINTS = TOTAL_CHANNELS * TOTAL_SHIFTS
 
   let okCount = 0
   let ngCount = 0
@@ -122,7 +147,9 @@ function updateChannelTable(data) {
     if (!statusMap[channel]) statusMap[channel] = {}
     if (!statusMap[channel][shift]) statusMap[channel][shift] = { ok: 0, ng: 0 }
 
-    status === "OK" ? statusMap[channel][shift].ok++ : statusMap[channel][shift].ng++
+    status === "OK"
+      ? statusMap[channel][shift].ok++
+      : statusMap[channel][shift].ng++
   })
 
   for (let i = 1; i <= 16; i++) {
@@ -207,7 +234,6 @@ function updateNGTrackerTable(data) {
   const ngEntries = data.filter((entry) => entry.Status === "NG")
 
   if (ngEntries.length === 0) {
-    // ✅ FIX: colspan harus 7 (sesuai 7 kolom tabel)
     tbody.innerHTML = `<tr><td colspan="7" class="text-center">Tidak ada NG hari ini</td></tr>`
     return
   }
@@ -228,7 +254,7 @@ function updateNGTrackerTable(data) {
 }
 
 // ================================
-// FORMAL PDF REPORT: NG TRACKER
+// FORMAL PDF REPORT
 // ================================
 function downloadNGFormalPdf() {
   const tbody = document.getElementById("remarkTableBody")
@@ -240,7 +266,6 @@ function downloadNGFormalPdf() {
   const filterDate = document.getElementById("filterDate")?.value || new Date().toISOString().split("T")[0]
   const rows = Array.from(tbody.querySelectorAll("tr"))
 
-  // kalau tabel sedang menampilkan "Tidak ada NG hari ini"
   if (rows.length === 1) {
     const tds = rows[0].querySelectorAll("td")
     if (tds.length === 1 && (tds[0].textContent || "").toLowerCase().includes("tidak ada ng")) {
@@ -249,7 +274,6 @@ function downloadNGFormalPdf() {
     }
   }
 
-  // Data: Tanggal | Channel | Shift | Master | Remark | Kategori | Code
   const data = []
   rows.forEach((tr) => {
     const cols = Array.from(tr.querySelectorAll("td")).map((td) => (td.textContent || "").trim())
@@ -264,7 +288,6 @@ function downloadNGFormalPdf() {
     return
   }
 
-  // ===== Summary statistic =====
   const countBy = (idx) => {
     const map = {}
     data.forEach((r) => {
@@ -301,7 +324,6 @@ function downloadNGFormalPdf() {
   const pad2 = (n) => String(n).padStart(2, "0")
   const generatedAt = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`
 
-  // ===== Watermark =====
   doc.saveGraphicsState()
   doc.setTextColor(210)
   doc.setFont("helvetica", "bold")
@@ -311,7 +333,6 @@ function downloadNGFormalPdf() {
   doc.text("INTERNAL USE ONLY", pageW / 2, pageH / 2 + 5, { align: "center", angle: 25 })
   doc.restoreGraphicsState()
 
-  // ===== Header =====
   doc.setTextColor(20)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(15)
@@ -324,7 +345,6 @@ function downloadNGFormalPdf() {
   doc.setLineWidth(0.3)
   doc.line(14, 28, pageW - 14, 28)
 
-  // ===== Report Information box =====
   const boxX = 14
   const boxY = 32
   const boxW = pageW - 28
@@ -340,19 +360,16 @@ function downloadNGFormalPdf() {
 
   doc.setFont("helvetica", "normal")
   doc.setFontSize(10)
-
   doc.text(`Date: ${filterDate}`, boxX + 3, boxY + 14)
   doc.text(`Total NG: ${totalNG}`, boxX + boxW / 2 + 2, boxY + 14)
-
   doc.setFontSize(9.5)
   doc.text(`Generated at: ${generatedAt}`, boxX + 3, boxY + 20)
 
-  // ===== Section A =====
   doc.setFont("helvetica", "bold")
   doc.setFontSize(12)
   doc.text("A. NG TRACKER DETAIL", 14, boxY + boxH + 10)
 
-  const body = data.map((r, i) => [String(i + 1), ...r]) // No + 7 kolom
+  const body = data.map((r, i) => [String(i + 1), ...r])
 
   doc.autoTable({
     startY: boxY + boxH + 14,
@@ -374,7 +391,6 @@ function downloadNGFormalPdf() {
     },
   })
 
-  // ===== Section B: Summary =====
   const afterTableY = doc.lastAutoTable.finalY + 10
   doc.setFont("helvetica", "bold")
   doc.setFontSize(12)
@@ -387,7 +403,6 @@ function downloadNGFormalPdf() {
   doc.text(`• Top Category: ${topCategory.key} (${topCategory.val})`, 16, afterTableY + 19)
   doc.text(`• Top Master: ${topMaster.key} (${topMaster.val})`, 16, afterTableY + 25)
 
-  // ===== Footer + Page Number =====
   const pageCount = doc.getNumberOfPages()
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p)
